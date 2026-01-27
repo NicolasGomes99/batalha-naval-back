@@ -14,6 +14,8 @@ public class Match
     public Difficulty? AiDifficulty { get; private set; }
     public MatchStatus Status { get; private set; }
     
+    public bool IsFinished => Status == MatchStatus.Finished;
+    
     public Guid CurrentTurnPlayerId { get; private set; }
     public Guid? WinnerId { get; private set; }
     

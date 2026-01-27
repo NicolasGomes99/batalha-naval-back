@@ -11,17 +11,23 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Remove="src\**" />
+        <EmbeddedResource Remove="src\**" />
+        <None Remove="src\**" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.2">
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-          <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Scalar.AspNetCore" Version="2.12.18" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="src\BatalhaNaval.Application\BatalhaNaval.Application.csproj" />
-      <ProjectReference Include="src\BatalhaNaval.Infrastructure\BatalhaNaval.Infrastructure.csproj" />
+        <ProjectReference Include="src\BatalhaNaval.Application\BatalhaNaval.Application.csproj" />
+        <ProjectReference Include="src\BatalhaNaval.Infrastructure\BatalhaNaval.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>
