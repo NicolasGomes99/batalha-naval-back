@@ -1,0 +1,19 @@
+services:
+  batalha-naval-postgres:
+    container_name: batalha-naval-postgres
+    image: postgres:18.1
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+       - ./docker-database-initial.sql:/docker-entrypoint-initdb.d/docker-database-initial.sql
+    restart: on-failure
+    networks:
+      - app-private-network
+
+networks:
+  app-private-network:
+    driver: bridge
+    name: app-private-network
