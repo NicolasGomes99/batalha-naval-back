@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using BatalhaNaval.Domain.Entities;
 using Newtonsoft.Json;
 
@@ -19,18 +21,26 @@ public class PlayerProfileConfiguration : IEntityTypeConfiguration<PlayerProfile
         builder.Property(p => p.Losses).HasColumnName("losses");
         builder.Property(p => p.CurrentStreak).HasColumnName("current_streak");
         builder.Property(p => p.MaxStreak).HasColumnName("max_streak");
+        
+        
+        // 1. Conversor Explícito: List<string> <-> String (JSON)
+        var medalConverter = new ValueConverter<List<string>, string>(
+            v => JsonConvert.SerializeObject(v),
+            v => JsonConvert.DeserializeObject<List<string>>(v) ?? new List<string>()
+        );
 
-        // Medalhas como lista de strings (JSONB array)
-        // Isso evita precisar fazer join com tabela de medalhas para leitura simples
+        // 2. Comparador de Valor: Ensina o EF a detectar mudanças na lista
+        var medalComparer = new ValueComparer<List<string>>(
+            (c1, c2) => c1.SequenceEqual(c2),
+            c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+            c => c.ToList());
+
         builder.Property(p => p.EarnedMedalCodes)
             .HasColumnName("medals_json") 
             .HasColumnType("jsonb")
-            .HasConversion(
-                v => JsonConvert.SerializeObject(v),
-                v => JsonConvert.DeserializeObject<List<string>>(v) ?? new List<string>()
-            );
+            .HasConversion(medalConverter)
+            .Metadata.SetValueComparer(medalComparer);
             
-        // Propriedade computada ignorada
         builder.Ignore(p => p.WinRate);
     }
 }

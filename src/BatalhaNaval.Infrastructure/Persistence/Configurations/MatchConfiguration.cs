@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using BatalhaNaval.Domain.Entities;
 using Newtonsoft.Json;
 
@@ -18,10 +20,9 @@ public class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.Player2Id).HasColumnName("player2_id");
         builder.Property(m => m.WinnerId).HasColumnName("winner_id");
         builder.Property(m => m.StartedAt).HasColumnName("started_at");
-        builder.Property(m => m.LastMoveAt).HasColumnName("last_move_at"); // Precisamos adicionar essa coluna no SQL ou via Migration
+        builder.Property(m => m.LastMoveAt).HasColumnName("last_move_at"); 
         builder.Property(m => m.CurrentTurnPlayerId).HasColumnName("current_turn_player_id");
-        
-        // Conversão de Enums para String (Mais legível no banco)
+
         builder.Property(m => m.Mode)
             .HasConversion<string>()
             .HasColumnName("game_mode");
@@ -32,30 +33,36 @@ public class MatchConfiguration : IEntityTypeConfiguration<Match>
             
         builder.Property(m => m.Status)
             .HasConversion<string>()
-            .HasColumnName("status"); // Nova coluna necessária
+            .HasColumnName("status");
 
-        // --- MAPEAMENTO COMPLEXO JSONB ---
-        // Serializamos o objeto Board inteiro para JSON ao salvar
-        // E deserializamos de volta para objeto ao ler.
+        // --- CONVERSORES PARA BOARD (JSONB) ---
         
+        // Conversor explícito
+        var boardConverter = new ValueConverter<Board, string>(
+            v => JsonConvert.SerializeObject(v),
+            v => JsonConvert.DeserializeObject<Board>(v) ?? new Board()
+        );
+
+        // O Comparer do Board é mais chato (objeto complexo). 
+        // Vamos forçar a serialização para comparar se mudou. É custoso mas seguro.
+        var boardComparer = new ValueComparer<Board>(
+            (c1, c2) => JsonConvert.SerializeObject(c1) == JsonConvert.SerializeObject(c2),
+            c => JsonConvert.SerializeObject(c).GetHashCode(),
+            c => JsonConvert.DeserializeObject<Board>(JsonConvert.SerializeObject(c))!
+        );
+
         builder.Property(m => m.Player1Board)
-            .HasColumnName("player1_board_json") // Coluna nova para armazenar estado
+            .HasColumnName("player1_board_json")
             .HasColumnType("jsonb")
-            .HasConversion(
-                v => JsonConvert.SerializeObject(v),
-                v => JsonConvert.DeserializeObject<Board>(v) ?? new Board()
-            );
+            .HasConversion(boardConverter)
+            .Metadata.SetValueComparer(boardComparer);
 
         builder.Property(m => m.Player2Board)
-            .HasColumnName("player2_board_json") // Coluna nova para armazenar estado
+            .HasColumnName("player2_board_json")
             .HasColumnType("jsonb")
-            .HasConversion(
-                v => JsonConvert.SerializeObject(v),
-                v => JsonConvert.DeserializeObject<Board>(v) ?? new Board()
-            );
+            .HasConversion(boardConverter)
+            .Metadata.SetValueComparer(boardComparer);
 
-        // Ignoramos a propriedade computada IsFinished para não criar coluna
         builder.Ignore(m => m.IsFinished);
-       // builder.Ignore(m => m.CurrentTurnPlayerId); Opcional: Persistir ou calcular? Vamos persistir para segurança.
     }
 }

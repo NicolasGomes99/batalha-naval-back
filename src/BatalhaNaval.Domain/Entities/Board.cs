@@ -7,27 +7,34 @@ public class Board
 {
     public const int Size = 10;
     public List<Ship> Ships { get; private set; } = new();
-    public CellState[,] Cells { get; private set; } = new CellState[Size, Size];
+    
+    // Isso é amigável para JSON e EF Core
+    public List<List<CellState>> Cells { get; private set; }
 
     public Board()
     {
-        // Inicializa o grid com Água
-        for (int i = 0; i < Size; i++)
-            for (int j = 0; j < Size; j++)
-                Cells[i, j] = CellState.Water;
+        // Inicializa a grade 10x10 com Água
+        Cells = new List<List<CellState>>();
+        for (int x = 0; x < Size; x++)
+        {
+            var row = new List<CellState>();
+            for (int y = 0; y < Size; y++)
+            {
+                row.Add(CellState.Water);
+            }
+            Cells.Add(row);
+        }
     }
 
     public void AddShip(Ship ship)
     {
-        // Valida limites e colisão para posicionamento inicial
         ValidateCoordinatesOrThrow(ship.Coordinates, ship.Id);
-
         Ships.Add(ship);
-
-        // Marca no Grid Visual
+        
         foreach (var coord in ship.Coordinates)
         {
-            Cells[coord.X, coord.Y] = CellState.Ship;
+            // MUDANÇA DE SINTAXE: [x][y]
+            Cells[coord.X][coord.Y] = CellState.Ship;
         }
     }
 
@@ -37,25 +44,21 @@ public class Board
         if (ship == null) 
             throw new KeyNotFoundException("Navio não encontrado neste tabuleiro.");
 
-        // 1. Predição
         var proposedCoordinates = ship.PredictMovement(direction);
-
-        // 2. Validação (Usa a mesma lógica do AddShip, mas ignora o próprio navio)
         ValidateCoordinatesOrThrow(proposedCoordinates, ship.Id);
 
-        // 3. Limpeza visual da posição antiga
+        // Limpa visual
         foreach (var coord in ship.Coordinates)
         {
-            Cells[coord.X, coord.Y] = CellState.Water; 
+            Cells[coord.X][coord.Y] = CellState.Water; 
         }
 
-        // 4. Confirmação
         ship.ConfirmMovement(proposedCoordinates);
 
-        // 5. Atualização visual da nova posição
+        // Atualiza visual
         foreach (var coord in ship.Coordinates)
         {
-            Cells[coord.X, coord.Y] = CellState.Ship;
+            Cells[coord.X][coord.Y] = CellState.Ship;
         }
     }
 
@@ -66,7 +69,6 @@ public class Board
             if (!coord.IsWithinBounds(Size))
                 throw new InvalidOperationException("Coordenada fora dos limites do tabuleiro.");
 
-            // Verifica se a célula já está ocupada por OUTRO navio
             var isOccupied = Ships.Any(otherShip => 
                 otherShip.Id != ignoreShipId && 
                 otherShip.Coordinates.Any(c => c.X == coord.X && c.Y == coord.Y));
@@ -78,29 +80,29 @@ public class Board
 
     public bool ReceiveShot(int x, int y)
     {
-        // Se já foi atingido antes (Hit ou Missed), retorna false ou lança erro?
-        // Game design: Geralmente apenas ignora ou avisa, aqui vamos considerar tiro inválido se repetido
-        if (Cells[x, y] == CellState.Hit || Cells[x, y] == CellState.Missed)
-             return false; // Tiro repetido não consome turno ou deve ser tratado acima
+        // Validação de segurança para acesso a lista
+        if (x < 0 || x >= Size || y < 0 || y >= Size) return false;
+
+        // MUDANÇA DE SINTAXE: [x][y]
+        if (Cells[x][y] == CellState.Hit || Cells[x][y] == CellState.Missed)
+             return false;
 
         var ship = Ships.FirstOrDefault(s => s.Coordinates.Any(c => c.X == x && c.Y == y));
         
         if (ship != null)
         {
             var coord = ship.Coordinates.First(c => c.X == x && c.Y == y);
-            
-            // Atualiza estado do navio (Objeto imutável Coordinate sendo substituído)
             var newCoords = new List<Coordinate>(ship.Coordinates);
             var index = newCoords.IndexOf(coord);
             newCoords[index] = coord with { IsHit = true };
             
-            ship.UpdateDamage(newCoords); // Método auxiliar no Ship para atualizar dano sem mover
+            ship.UpdateDamage(newCoords);
 
-            Cells[x, y] = CellState.Hit;
+            Cells[x][y] = CellState.Hit;
             return true;
         }
 
-        Cells[x, y] = CellState.Missed;
+        Cells[x][y] = CellState.Missed;
         return false;
     }
     
