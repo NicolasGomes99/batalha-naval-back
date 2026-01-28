@@ -1,0 +1,25 @@
+meta {
+  name: Atirar
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/match/shot
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "matchId": "a929926b-38c0-4031-bf98-6a962741b71e",
+    "playerId": "fb084f8c-fa6e-4ffe-a14c-9a470c668c24",
+    "x": 5,
+    "y": 5
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

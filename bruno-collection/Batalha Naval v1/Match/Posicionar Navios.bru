@@ -1,0 +1,60 @@
+meta {
+  name: Posicionar Navios
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/match/setup
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "matchId": "a929926b-38c0-4031-bf98-6a962741b71e",
+    "playerId": "fb084f8c-fa6e-4ffe-a14c-9a470c668c24",
+    "ships": [
+      {
+        "name": "Porta-Aviões",
+        "size": 5,
+        "startX": 0,
+        "startY": 0,
+        "orientation": "Vertical"
+      },
+      {
+        "name": "Encouraçado",
+        "size": 4,
+        "startX": 2,
+        "startY": 0,
+        "orientation": "Vertical"
+      },
+      {
+        "name": "Submarino",
+        "size": 3,
+        "startX": 4,
+        "startY": 0,
+        "orientation": "Vertical"
+      },
+      {
+        "name": "Destroyer",
+        "size": 3,
+        "startX": 6,
+        "startY": 0,
+        "orientation": "Vertical"
+      },
+      {
+        "name": "Patrulha",
+        "size": 2,
+        "startX": 8,
+        "startY": 0,
+        "orientation": "Vertical"
+      }
+    ]
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

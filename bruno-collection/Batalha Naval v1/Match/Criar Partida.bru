@@ -1,0 +1,29 @@
+meta {
+  name: Criar Partida
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/match
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "playerId": "fb084f8c-fa6e-4ffe-a14c-9a470c668c24",
+    "mode": "Dynamic",
+    "aiDifficulty": "Basic"
+  }
+}
+
+script:post-response {
+  const data = res.getBody();
+  bru.setEnvVar("matchId", data);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

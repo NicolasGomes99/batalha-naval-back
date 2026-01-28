@@ -1,0 +1,16 @@
+meta {
+  name: Health Check Live
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/health/live
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
