@@ -14,22 +14,30 @@ CREATE TABLE player_profiles (
     losses INTEGER DEFAULT 0,
     current_streak INTEGER DEFAULT 0,
     max_streak INTEGER DEFAULT 0,
+    medals_json JSONB DEFAULT '[]'::jsonb,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE matches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     player1_id UUID NOT NULL REFERENCES users(id),
-    player2_id UUID REFERENCES users(id),
+    player2_id UUID REFERENCES users(id), -- Pode ser NULL se for PvE (vs IA)
     winner_id UUID REFERENCES users(id),
-    
-    game_mode VARCHAR(20) NOT NULL CHECK (game_mode IN ('CLASSIC', 'DYNAMIC')),
-    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('BASIC', 'INTERMEDIATE', 'ADVANCED')),
-    
+
+    -- Enums convertidos para String
+    game_mode VARCHAR(20) NOT NULL CHECK (game_mode IN ('Classic', 'Dynamic')),
+    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('Basic', 'Intermediate', 'Advanced')),
+    status VARCHAR(20) NOT NULL DEFAULT 'Setup' CHECK (status IN ('Setup', 'InProgress', 'Finished')),
+
+    -- Controle de Turno e Tempo
+    current_turn_player_id UUID, -- Persistência de quem é a vez
     started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    last_move_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Para validar os 30s
     finished_at TIMESTAMP WITH TIME ZONE,
-    
-    match_log JSONB DEFAULT '[]'::jsonb
+
+    -- Tabuleiros completos como JSON
+    player1_board_json JSONB DEFAULT '{}'::jsonb,
+    player2_board_json JSONB DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE medals (
@@ -47,9 +55,10 @@ CREATE TABLE user_medals (
 );
 
 CREATE INDEX idx_profiles_rank_points ON player_profiles (rank_points DESC);
-
 CREATE INDEX idx_matches_player1 ON matches (player1_id);
 CREATE INDEX idx_matches_player2 ON matches (player2_id);
+CREATE INDEX idx_matches_status ON matches (status);
+
 
 INSERT INTO medals (name, description, code) VALUES
 ('Almirante', 'Vencer sem perder navios.', 'ADMIRAL'),

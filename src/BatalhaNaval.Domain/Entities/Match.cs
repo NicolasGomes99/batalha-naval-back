@@ -78,7 +78,7 @@ public class Match
 
         // Se acertou água (CellState.Missed), passa a vez.
         // Se acertou navio (CellState.Hit), mantém a vez (Regra: "Caso acerte... pode jogar outra bomba")
-        var cellState = targetBoard.Cells[x, y];
+        var cellState = targetBoard.Cells[x][y];
         bool hitShip = cellState == CellState.Hit;
 
         if (targetBoard.AllShipsSunk())
@@ -119,7 +119,7 @@ public class Match
         if (playerId != CurrentTurnPlayerId) throw new InvalidOperationException("Não é o seu turno.");
         
         // Validação de tempo (30s)
-        if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 31)
+        if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 3001) // esse tempo DEVE SER 31
         {
             SwitchTurn();
             throw new TimeoutException("Tempo de jogada esgotado. Vez passada.");

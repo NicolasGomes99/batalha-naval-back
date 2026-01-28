@@ -72,7 +72,7 @@ public class AdvancedAiStrategy : IAiStrategy
             // Se encontrar um tiro na água (Missed) ou um navio já afundado (Hit), não cabe aqui.
             // Nota: Se for Hit mas o navio não afundou, tecnicamente *poderia* ser parte dele,
             // mas simplificamos assumindo que estamos no modo "Hunt" (procurando no escuro).
-            if (board.Cells[cx, cy] == CellState.Missed || board.Cells[cx, cy] == CellState.Hit)
+            if (board.Cells[cx][cy] == CellState.Missed || board.Cells[cx][cy] == CellState.Hit)
                 return false;
         }
         return true;
@@ -88,7 +88,7 @@ public class AdvancedAiStrategy : IAiStrategy
             for (int y = 0; y < Board.Size; y++)
             {
                 // Só considera células válidas para tiro
-                if (board.Cells[x, y] == CellState.Hit || board.Cells[x, y] == CellState.Missed) continue;
+                if (board.Cells[x][y] == CellState.Hit || board.Cells[x][y] == CellState.Missed) continue;
 
                 if (heatMap[x, y] > maxScore)
                 {

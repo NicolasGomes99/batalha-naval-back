@@ -50,7 +50,7 @@ public class IntermediateAiStrategy : IAiStrategy
             if (nx >= 0 && nx < Board.Size && ny >= 0 && ny < Board.Size)
             {
                 // Verifica se já não atirou lá
-                var cell = board.Cells[nx, ny];
+                var cell = board.Cells[nx][ny];
                 if (cell != CellState.Hit && cell != CellState.Missed)
                 {
                     valid.Add(new Coordinate(nx, ny));
