@@ -1,5 +1,5 @@
-﻿using BatalhaNaval.Domain.ValueObjects;
-using BatalhaNaval.Domain.Entities;
+﻿using BatalhaNaval.Domain.Entities;
+using BatalhaNaval.Domain.ValueObjects;
 
 namespace BatalhaNaval.Domain.Interfaces;
 

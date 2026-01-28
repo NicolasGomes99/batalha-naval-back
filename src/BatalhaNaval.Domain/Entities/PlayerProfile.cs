@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BatalhaNaval.Domain.Entities;
@@ -9,33 +10,39 @@ public class PlayerProfile
     [Key]
     [ForeignKey(nameof(User))]
     [Column("user_id")]
+    [Description("Identificador único do jogador")]
     public Guid UserId { get; set; }
 
+    [Description("Usuário associado ao perfil do jogador")]
     public virtual User? User { get; set; }
 
+    [Description("Pontos de ranking do jogador")]
     [Column("rank_points")]
     public int RankPoints { get; set; }
 
+    [Description("Número de vitórias do jogador")]
     [Column("wins")]
     public int Wins { get; set; }
 
+    [Description("Número de derrotas do jogador")]
     [Column("losses")]
     public int Losses { get; set; }
 
+    [Description("Sequência atual de vitórias do jogador")]
     [Column("current_streak")]
     public int CurrentStreak { get; set; }
 
+    [Description("Maior sequência de vitórias do jogador")]
     [Column("max_streak")]
     public int MaxStreak { get; set; }
 
+    [Description("Data e hora da atualização do perfil")]
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    [NotMapped] 
-    public double WinRate => (Wins + Losses) == 0 ? 0 : (double)Wins / (Wins + Losses);
+    [NotMapped] public double WinRate => Wins + Losses == 0 ? 0 : (double)Wins / (Wins + Losses);
 
-    [NotMapped]
-    public List<string> EarnedMedalCodes { get; set; } = new();
+    [NotMapped] public List<string> EarnedMedalCodes { get; set; } = new();
 
     public void AddWin(int points)
     {

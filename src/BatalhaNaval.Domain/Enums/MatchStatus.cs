@@ -2,7 +2,7 @@
 
 public enum MatchStatus
 {
-    Setup,      // Posicionando navios
+    Setup, // Posicionando navios
     InProgress, // Trocando tiros/movimentos
-    Finished    // Jogo acabou
+    Finished // Jogo acabou
 }

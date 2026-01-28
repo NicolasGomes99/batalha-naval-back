@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using BatalhaNaval.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using BatalhaNaval.Domain.Entities;
 using Newtonsoft.Json;
 
 namespace BatalhaNaval.Infrastructure.Persistence.Configurations;
@@ -21,8 +21,8 @@ public class PlayerProfileConfiguration : IEntityTypeConfiguration<PlayerProfile
         builder.Property(p => p.Losses).HasColumnName("losses");
         builder.Property(p => p.CurrentStreak).HasColumnName("current_streak");
         builder.Property(p => p.MaxStreak).HasColumnName("max_streak");
-        
-        
+
+
         // 1. Conversor Explícito: List<string> <-> String (JSON)
         var medalConverter = new ValueConverter<List<string>, string>(
             v => JsonConvert.SerializeObject(v),
@@ -36,11 +36,11 @@ public class PlayerProfileConfiguration : IEntityTypeConfiguration<PlayerProfile
             c => c.ToList());
 
         builder.Property(p => p.EarnedMedalCodes)
-            .HasColumnName("medals_json") 
+            .HasColumnName("medals_json")
             .HasColumnType("jsonb")
             .HasConversion(medalConverter)
             .Metadata.SetValueComparer(medalComparer);
-            
+
         builder.Ignore(p => p.WinRate);
     }
 }

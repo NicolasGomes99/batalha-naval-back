@@ -3,6 +3,7 @@ using BatalhaNaval.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BatalhaNaval.API.Controllers;
+
 [ApiController]
 [Route("[controller]")]
 [Produces("application/json")]
@@ -16,10 +17,10 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Cria um novo usuário.
+    ///     Cria um novo usuário.
     /// </summary>
     /// <remarks>
-    /// Cria um usuário com nome de usuário e senha fornecidos.
+    ///     Cria um usuário com nome de usuário e senha fornecidos.
     /// </remarks>
     /// <response code="201">Usuário criado com sucesso.</response>
     /// <response code="400">Nome de usuário já está em uso ou dados inválidos.</response>

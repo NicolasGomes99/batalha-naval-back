@@ -1,4 +1,5 @@
 ﻿namespace BatalhaNaval.Domain.Enums;
+
 public enum Difficulty
 {
     Basic,

@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using BatalhaNaval.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using BatalhaNaval.Domain.Entities;
 using Newtonsoft.Json;
 
 namespace BatalhaNaval.Infrastructure.Persistence.Configurations;
@@ -20,7 +20,7 @@ public class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.Player2Id).HasColumnName("player2_id");
         builder.Property(m => m.WinnerId).HasColumnName("winner_id");
         builder.Property(m => m.StartedAt).HasColumnName("started_at");
-        builder.Property(m => m.LastMoveAt).HasColumnName("last_move_at"); 
+        builder.Property(m => m.LastMoveAt).HasColumnName("last_move_at");
         builder.Property(m => m.CurrentTurnPlayerId).HasColumnName("current_turn_player_id");
 
         builder.Property(m => m.Mode)
@@ -30,13 +30,13 @@ public class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.AiDifficulty)
             .HasConversion<string>()
             .HasColumnName("ai_difficulty");
-            
+
         builder.Property(m => m.Status)
             .HasConversion<string>()
             .HasColumnName("status");
 
         // --- CONVERSORES PARA BOARD (JSONB) ---
-        
+
         // Conversor explícito
         var boardConverter = new ValueConverter<Board, string>(
             v => JsonConvert.SerializeObject(v),

@@ -1,30 +1,13 @@
-﻿using BatalhaNaval.Domain.Enums;
-using BatalhaNaval.Domain.ValueObjects;
+﻿using System.ComponentModel;
+using BatalhaNaval.Domain.Enums;
 
 namespace BatalhaNaval.Domain.Entities;
 
 public class Match
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
-    public Guid Player1Id { get; private set; }
-    public Guid? Player2Id { get; private set; }
-    public Board Player1Board { get; private set; }
-    public Board Player2Board { get; private set; }
-    public GameMode Mode { get; private set; }
-    public Difficulty? AiDifficulty { get; private set; }
-    public MatchStatus Status { get; private set; }
-    
-    public bool IsFinished => Status == MatchStatus.Finished;
-    
-    public Guid CurrentTurnPlayerId { get; private set; }
-    public Guid? WinnerId { get; private set; }
-    
-    public DateTime StartedAt { get; private set; } // Quando o status muda para InProgress
-    public DateTime LastMoveAt { get; private set; }
-
     // Controle de prontidão
-    private bool _player1Ready = false;
-    private bool _player2Ready = false; // Se for IA, já começa true ou logicamente tratado
+    private bool _player1Ready;
+    private bool _player2Ready; // Se for IA, já começa true ou logicamente tratado
 
     public Match(Guid player1Id, GameMode mode, Difficulty? aiDifficulty = null, Guid? player2Id = null)
     {
@@ -33,12 +16,50 @@ public class Match
         Mode = mode;
         AiDifficulty = aiDifficulty;
         Status = MatchStatus.Setup;
-        
+
         Player1Board = new Board();
         Player2Board = new Board();
-        
+
         CurrentTurnPlayerId = player1Id; // P1 começa o setup, ou aleatório no início do jogo
     }
+
+    [Description("Identificador único da partida")]
+    public Guid Id { get; private set; } = Guid.NewGuid();
+
+    [Description("Identificador único do jogador 1")]
+    public Guid Player1Id { get; }
+
+    [Description("Identificador único do jogador 2")]
+    public Guid? Player2Id { get; }
+
+    [Description("Tabuleiro do jogador 1")]
+    public Board Player1Board { get; }
+
+    [Description("Tabuleiro do jogador 2")]
+    public Board Player2Board { get; }
+
+    [Description("Modo de jogo")] public GameMode Mode { get; }
+
+    [Description("Dificuldade da IA, se aplicável")]
+    public Difficulty? AiDifficulty { get; private set; }
+
+    [Description("Status atual da partida")]
+    public MatchStatus Status { get; private set; }
+
+    [Description("Indica se a partida está finalizada")]
+    public bool IsFinished => Status == MatchStatus.Finished;
+
+    [Description("Identificador único do jogador atual")]
+    public Guid CurrentTurnPlayerId { get; private set; }
+
+    [Description("Identificador único do vencedor")]
+    public Guid? WinnerId { get; private set; }
+
+    [Description("Data e hora de início da partida")]
+    public DateTime StartedAt { get; private set; } // Quando o status muda para InProgress
+
+    [Description("Data e hora do último movimento")]
+    public DateTime LastMoveAt { get; private set; }
 
     // Método chamado quando o jogador termina de posicionar navios
     public void SetPlayerReady(Guid playerId)
@@ -49,11 +70,8 @@ public class Match
         else if (playerId == Player2Id) _player2Ready = true;
 
         // Verifica se pode iniciar o jogo
-        bool isAiGame = Player2Id == null;
-        if (_player1Ready && (_player2Ready || isAiGame))
-        {
-            StartGame();
-        }
+        var isAiGame = Player2Id == null;
+        if (_player1Ready && (_player2Ready || isAiGame)) StartGame();
     }
 
     private void StartGame()
@@ -70,25 +88,20 @@ public class Match
     {
         ValidateTurn(playerId);
 
-        var targetBoard = (playerId == Player1Id) ? Player2Board : Player1Board;
-        
+        var targetBoard = playerId == Player1Id ? Player2Board : Player1Board;
+
         // Verifica se o tiro é válido (não repetido)
         // Se retornar false (tiro repetido), não troca o turno, apenas avisa (tratamento na App Layer)
-        bool result = targetBoard.ReceiveShot(x, y);
+        var result = targetBoard.ReceiveShot(x, y);
 
         // Se acertou água (CellState.Missed), passa a vez.
         // Se acertou navio (CellState.Hit), mantém a vez (Regra: "Caso acerte... pode jogar outra bomba")
         var cellState = targetBoard.Cells[x][y];
-        bool hitShip = cellState == CellState.Hit;
+        var hitShip = cellState == CellState.Hit;
 
         if (targetBoard.AllShipsSunk())
-        {
             FinishGame(playerId);
-        }
-        else if (!hitShip)
-        {
-            SwitchTurn();
-        }
+        else if (!hitShip) SwitchTurn();
 
         LastMoveAt = DateTime.UtcNow;
         return hitShip;
@@ -102,8 +115,8 @@ public class Match
 
         ValidateTurn(playerId);
 
-        var myBoard = (playerId == Player1Id) ? Player1Board : Player2Board;
-        
+        var myBoard = playerId == Player1Id ? Player1Board : Player2Board;
+
         // Tenta mover. Se falhar (colisão/navio atingido), o Board lança exceção e o turno NÃO muda.
         myBoard.MoveShip(shipId, direction);
 
@@ -117,7 +130,7 @@ public class Match
         if (Status != MatchStatus.InProgress) throw new InvalidOperationException("A partida não está em andamento.");
         if (IsFinishedOrTimeout()) throw new InvalidOperationException("Partida finalizada ou tempo esgotado.");
         if (playerId != CurrentTurnPlayerId) throw new InvalidOperationException("Não é o seu turno.");
-        
+
         // Validação de tempo (30s)
         if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 3001) // esse tempo DEVE SER 31
         {
@@ -126,12 +139,15 @@ public class Match
         }
     }
 
-    private bool IsFinishedOrTimeout() => Status == MatchStatus.Finished;
+    private bool IsFinishedOrTimeout()
+    {
+        return Status == MatchStatus.Finished;
+    }
 
     private void SwitchTurn()
     {
-        CurrentTurnPlayerId = (CurrentTurnPlayerId == Player1Id) 
-            ? (Player2Id ?? Guid.Empty) 
+        CurrentTurnPlayerId = CurrentTurnPlayerId == Player1Id
+            ? Player2Id ?? Guid.Empty
             : Player1Id;
     }
 

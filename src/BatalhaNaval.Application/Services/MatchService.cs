@@ -21,7 +21,7 @@ public class MatchService : IMatchService
     {
         // Cria a partida (Entidade de Domínio)
         var match = new Match(input.PlayerId, input.Mode, input.AiDifficulty, input.OpponentId);
-        
+
         await _repository.SaveAsync(match);
         return match.Id;
     }
@@ -33,7 +33,7 @@ public class MatchService : IMatchService
         if (match.Status != MatchStatus.Setup)
             throw new InvalidOperationException("A partida não está na fase de preparação.");
 
-        var board = (input.PlayerId == match.Player1Id) ? match.Player1Board : match.Player2Board;
+        var board = input.PlayerId == match.Player1Id ? match.Player1Board : match.Player2Board;
 
         // Limpa navios anteriores se houver (para permitir reset no setup)
         board.Ships.Clear();
@@ -43,7 +43,7 @@ public class MatchService : IMatchService
         {
             // Cria coordenadas baseadas na posição inicial e orientação
             var coordinates = GenerateCoordinates(shipDto.StartX, shipDto.StartY, shipDto.Size, shipDto.Orientation);
-            
+
             var ship = new Ship(shipDto.Name, shipDto.Size, coordinates, shipDto.Orientation);
             board.AddShip(ship);
         }
@@ -66,18 +66,19 @@ public class MatchService : IMatchService
         var match = await GetMatchOrThrow(input.MatchId);
 
         // 1. Executa o tiro do jogador (Entidade Match valida turno e regras)
-        bool isHit = match.ExecuteShot(input.PlayerId, input.X, input.Y);
-        
+        var isHit = match.ExecuteShot(input.PlayerId, input.X, input.Y);
+
         // Verifica estado pós-tiro
-        bool isSunk = false; // Precisaríamos verificar se o tiro afundou algo específico, 
-                             // mas para o retorno simples, vamos focar no estado geral ou checar o grid.
-                             // Otimização: O Board poderia retornar metadata do tiro, mas vamos inferir.
-        
-        var targetBoard = (input.PlayerId == match.Player1Id) ? match.Player2Board : match.Player1Board;
+        var isSunk = false; // Precisaríamos verificar se o tiro afundou algo específico, 
+        // mas para o retorno simples, vamos focar no estado geral ou checar o grid.
+        // Otimização: O Board poderia retornar metadata do tiro, mas vamos inferir.
+
+        var targetBoard = input.PlayerId == match.Player1Id ? match.Player2Board : match.Player1Board;
         // Se acertou, verificamos se o navio naquela posição afundou agora
         if (isHit)
         {
-            var hitShip = targetBoard.Ships.FirstOrDefault(s => s.Coordinates.Any(c => c.X == input.X && c.Y == input.Y));
+            var hitShip =
+                targetBoard.Ships.FirstOrDefault(s => s.Coordinates.Any(c => c.X == input.X && c.Y == input.Y));
             if (hitShip != null && hitShip.IsSunk) isSunk = true;
         }
 
@@ -93,10 +94,7 @@ public class MatchService : IMatchService
 
         // 4. TURNO DA IA (Automático)
         // Se for contra IA, e o turno mudou para o Player 2 (IA), ela deve jogar
-        if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty)
-        {
-             await ProcessAiTurnLoopAsync(match);
-        }
+        if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty) await ProcessAiTurnLoopAsync(match);
 
         return new TurnResultDto(isHit, isSunk, match.IsFinished, match.WinnerId, isHit ? "Acertou!" : "Água.");
     }
@@ -111,10 +109,7 @@ public class MatchService : IMatchService
         await _repository.SaveAsync(match);
 
         // Se for contra IA, o movimento passa a vez. A IA deve responder.
-        if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty)
-        {
-            await ProcessAiTurnLoopAsync(match);
-        }
+        if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty) await ProcessAiTurnLoopAsync(match);
     }
 
     // --- MÉTODOS PRIVADOS AUXILIARES ---
@@ -144,14 +139,14 @@ public class MatchService : IMatchService
 
             // 3. Executa o tiro (Guid.Empty é o ID da IA na lógica interna do Match)
             // Nota: Adicionamos um pequeno delay artificial? Não no backend, o front cuida da animação.
-            bool aiHit = match.ExecuteShot(Guid.Empty, target.X, target.Y);
+            var aiHit = match.ExecuteShot(Guid.Empty, target.X, target.Y);
 
             if (match.IsFinished)
             {
                 await ProcessEndGameAsync(match);
                 break;
             }
-            
+
             // Se a IA errou, o ExecuteShot já passou a vez para o Player1, e o loop while vai parar.
             // Se a IA acertou, o ExecuteShot manteve a vez nela, e o loop continua.
         }
@@ -167,20 +162,18 @@ public class MatchService : IMatchService
             if (winnerProfile != null)
             {
                 // Pontuação simples: 100 pts por vitória
-                winnerProfile.AddWin(100); 
-                
+                winnerProfile.AddWin(100);
+
                 // Lógica de Medalhas poderia vir aqui (Ex: checar se venceu sem perder navios)
                 if (match.WinnerId == match.Player1Id && !match.Player1Board.Ships.Any(s => s.IsSunk))
-                {
                     if (!winnerProfile.EarnedMedalCodes.Contains("ADMIRAL"))
                         winnerProfile.EarnedMedalCodes.Add("ADMIRAL");
-                }
 
                 await _repository.UpdateUserProfileAsync(winnerProfile);
             }
 
             // Atualiza perdedor (se for humano)
-            var loserId = (match.WinnerId == match.Player1Id) ? match.Player2Id : match.Player1Id;
+            var loserId = match.WinnerId == match.Player1Id ? match.Player2Id : match.Player1Id;
             if (loserId != null && loserId != Guid.Empty)
             {
                 var loserProfile = await _repository.GetUserProfileAsync(loserId.Value);
@@ -209,14 +202,14 @@ public class MatchService : IMatchService
 
         foreach (var (name, size) in fleetSpecs)
         {
-            bool placed = false;
-            int attempts = 0;
+            var placed = false;
+            var attempts = 0;
 
             while (!placed && attempts < 100)
             {
                 var orientation = random.Next(2) == 0 ? ShipOrientation.Horizontal : ShipOrientation.Vertical;
-                int x = random.Next(Board.Size);
-                int y = random.Next(Board.Size);
+                var x = random.Next(Board.Size);
+                var y = random.Next(Board.Size);
 
                 try
                 {
@@ -237,12 +230,13 @@ public class MatchService : IMatchService
     private List<Coordinate> GenerateCoordinates(int startX, int startY, int size, ShipOrientation orientation)
     {
         var coords = new List<Coordinate>();
-        for (int i = 0; i < size; i++)
+        for (var i = 0; i < size; i++)
         {
-            int x = orientation == ShipOrientation.Horizontal ? startX + i : startX;
-            int y = orientation == ShipOrientation.Vertical ? startY + i : startY;
+            var x = orientation == ShipOrientation.Horizontal ? startX + i : startX;
+            var y = orientation == ShipOrientation.Vertical ? startY + i : startY;
             coords.Add(new Coordinate(x, y));
         }
+
         return coords;
     }
 }

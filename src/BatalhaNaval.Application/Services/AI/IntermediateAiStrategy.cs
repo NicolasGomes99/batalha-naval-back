@@ -24,10 +24,7 @@ public class IntermediateAiStrategy : IAiStrategy
             foreach (var hit in hitCoords)
             {
                 var neighbors = GetValidNeighbors(hit, enemyBoard);
-                if (neighbors.Any())
-                {
-                    return neighbors[_random.Next(neighbors.Count)];
-                }
+                if (neighbors.Any()) return neighbors[_random.Next(neighbors.Count)];
             }
         }
 
@@ -43,20 +40,18 @@ public class IntermediateAiStrategy : IAiStrategy
 
         foreach (var (dx, dy) in deltas)
         {
-            int nx = c.X + dx;
-            int ny = c.Y + dy;
+            var nx = c.X + dx;
+            var ny = c.Y + dy;
 
             // Verifica limites
             if (nx >= 0 && nx < Board.Size && ny >= 0 && ny < Board.Size)
             {
                 // Verifica se já não atirou lá
                 var cell = board.Cells[nx][ny];
-                if (cell != CellState.Hit && cell != CellState.Missed)
-                {
-                    valid.Add(new Coordinate(nx, ny));
-                }
+                if (cell != CellState.Hit && cell != CellState.Missed) valid.Add(new Coordinate(nx, ny));
             }
         }
+
         return valid;
     }
 }

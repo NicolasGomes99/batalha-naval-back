@@ -1,15 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using BatalhaNaval.Application.DTOs;
+﻿using BatalhaNaval.Application.DTOs;
 using BatalhaNaval.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 
 namespace batalha_naval_back.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
+[Produces("application/json")]
 public class MatchController : ControllerBase
 {
-    private readonly IMatchService _matchService;
     private readonly ILogger<MatchController> _logger;
+    private readonly IMatchService _matchService;
 
     public MatchController(IMatchService matchService, ILogger<MatchController> logger)
     {
@@ -18,9 +19,14 @@ public class MatchController : ControllerBase
     }
 
     /// <summary>
-    /// Inicia uma nova partida (PvP ou PvE)
+    ///     Inicia uma nova partida (PvP ou PvE)
     /// </summary>
-    [HttpPost]
+    /// <remarks>
+    ///     Inicia uma nova partida (PvP ou PvE).
+    /// </remarks>
+    /// <response code="201">Partida iniciada com sucesso.</response>
+    /// <response code="400">Dados inválidos para iniciar a partida.</response>
+    [HttpPost(Name = "PostStartMatch")]
     [ProducesResponseType(typeof(Guid), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> StartMatch([FromBody] StartMatchInput input)
@@ -37,9 +43,15 @@ public class MatchController : ControllerBase
     }
 
     /// <summary>
-    /// Posiciona os navios no tabuleiro (Fase de Setup)
+    ///     Posiciona os navios no tabuleiro (Fase de Setup)
     /// </summary>
-    [HttpPost("setup")]
+    /// <remarks>
+    ///     Posiciona os navios no tabuleiro durante a fase de setup.
+    /// </remarks>
+    /// <response code="200">Navios posicionados com sucesso.</response>
+    /// <response code="400">Dados inválidos para posicionar os navios.</response>
+    /// <response code="404">Partida não encontrada.</response>
+    [HttpPost("setup", Name = "PostSetupShips")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -66,9 +78,14 @@ public class MatchController : ControllerBase
     }
 
     /// <summary>
-    /// Executa um tiro (Ação principal do jogo)
+    ///     Executa um tiro (Ação principal do jogo)
     /// </summary>
-    [HttpPost("shot")]
+    /// <remarks>
+    ///     Executa um tiro durante o jogo.
+    /// </remarks>
+    /// <response code="200">Tiro executado com sucesso.</response>
+    /// <response code="400">Dados inválidos para executar o tiro.</response>
+    [HttpPost("shot", Name = "PostExecuteShot")]
     [ProducesResponseType(typeof(TurnResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -94,9 +111,14 @@ public class MatchController : ControllerBase
     }
 
     /// <summary>
-    /// Move um navio (Apenas Modo Dinâmico)
+    ///     Move um navio (Apenas Modo Dinâmico)
     /// </summary>
-    [HttpPost("move")]
+    /// <remarks>
+    ///     Move um navio durante o jogo no modo dinâmico.
+    /// </remarks>
+    /// <response code="200">Navio movido com sucesso.</response>
+    /// <response code="400">Dados inválidos para mover o navio.</response>
+    [HttpPost("move", Name = "PostMoveShip")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MoveShip([FromBody] MoveShipInput input)

@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using BatalhaNaval.Domain.Entities;
 using BatalhaNaval.Infrastructure.Persistence.Configurations;
+using Microsoft.EntityFrameworkCore;
 
 namespace BatalhaNaval.Infrastructure.Persistence;
 
@@ -19,7 +19,7 @@ public class BatalhaNavalDbContext : DbContext
         // Aplica as configurações separadas (Mapeamento)
         modelBuilder.ApplyConfiguration(new MatchConfiguration());
         modelBuilder.ApplyConfiguration(new PlayerProfileConfiguration());
-        
+
         base.OnModelCreating(modelBuilder);
     }
 }

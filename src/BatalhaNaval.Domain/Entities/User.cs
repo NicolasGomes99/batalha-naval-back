@@ -15,11 +15,11 @@ public class User
     [Column("username")]
     [Description("Nome de usuário")]
     public string Username { get; set; } = string.Empty;
-    
+
     [Column("password_hash")]
     [Description("Hash da senha do usuário")]
     public string PasswordHash { get; set; } = string.Empty;
-    
+
     [Column("created_at")]
     [Description("Data de criação do usuário")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
