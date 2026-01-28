@@ -5,6 +5,7 @@ using BatalhaNaval.Infrastructure.Persistence;
 using BatalhaNaval.Infrastructure.Repositories;
 using BatalhaNaval.Application.Interfaces;
 using BatalhaNaval.Application.Services;
+using BatalhaNaval.Domain.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,6 +57,27 @@ builder.Services.AddOpenApi("v1", options =>
         return Task.CompletedTask;
     });
 });
+
+builder.Services.AddDbContext<BatalhaNavalDbContext>(options =>
+{
+    options.UseNpgsql(connectionString, npgsqlOptions => 
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5, 
+            maxRetryDelay: TimeSpan.FromSeconds(10), 
+            errorCodesToAdd: null);
+    });
+    
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging(); 
+        options.EnableDetailedErrors();
+    }
+});
+
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+builder.Services.AddScoped<IUserService, UserService>();
 
 var app = builder.Build();
 

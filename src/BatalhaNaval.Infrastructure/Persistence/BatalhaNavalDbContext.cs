@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using BatalhaNaval.Domain.Entities;
 using BatalhaNaval.Infrastructure.Persistence.Configurations;
 
@@ -12,6 +12,7 @@ public class BatalhaNavalDbContext : DbContext
 
     public DbSet<Match> Matches { get; set; }
     public DbSet<PlayerProfile> PlayerProfiles { get; set; }
+    public DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
