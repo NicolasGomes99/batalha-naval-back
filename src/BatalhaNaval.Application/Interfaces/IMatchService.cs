@@ -4,11 +4,11 @@ namespace BatalhaNaval.Application.Interfaces;
 
 public interface IMatchService
 {
-    Task<Guid> StartMatchAsync(StartMatchInput input);
+    Task<Guid> StartMatchAsync(StartMatchInput input, Guid playerId);
 
-    Task SetupShipsAsync(PlaceShipsInput input);
+    Task SetupShipsAsync(PlaceShipsInput input, Guid playerId);
 
-    Task<TurnResultDto> ExecutePlayerShotAsync(ShootInput input);
+    Task<TurnResultDto> ExecutePlayerShotAsync(ShootInput input, Guid playerId);
 
     Task ExecutePlayerMoveAsync(MoveShipInput input); // Modo Dinâmico
     // O turno da IA pode ser disparado automaticamente após o turno do jogador

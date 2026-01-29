@@ -20,15 +20,19 @@ public class MatchService : IMatchService
         _userRepository = userRepository;
     }
 
-    public async Task<Guid> StartMatchAsync(StartMatchInput input)
+    public async Task<Guid> StartMatchAsync(StartMatchInput input, Guid playerId)
     {
-        var playerExists = await _userRepository.ExistsAsync(input.PlayerId);
+        var playerExists = await _userRepository.ExistsAsync(playerId);
 
-        if (!playerExists) throw new KeyNotFoundException($"O Jogador com ID '{input.PlayerId}' não foi encontrado.");
+        if (!playerExists) throw new KeyNotFoundException($"O Jogador com ID '{playerId}' não foi encontrado.");
+        
+        if (input.OpponentId.HasValue && input.AiDifficulty.HasValue)
+            throw new ArgumentException(
+                "Não é possível definir um oponente humano e uma dificuldade de IA ao mesmo tempo.");
 
         if (input.OpponentId.HasValue)
         {
-            if (input.PlayerId == input.OpponentId.Value)
+            if (playerId == input.OpponentId.Value)
                 throw new ArgumentException("O jogador não pode jogar contra si mesmo.");
 
             var opponentExists = await _userRepository.ExistsAsync(input.OpponentId.Value);
@@ -36,12 +40,8 @@ public class MatchService : IMatchService
                 throw new KeyNotFoundException($"O Oponente com ID '{input.OpponentId.Value}' não foi encontrado.");
         }
 
-        if (input.OpponentId.HasValue && input.AiDifficulty.HasValue)
-            throw new ArgumentException(
-                "Não é possível definir um oponente humano e uma dificuldade de IA ao mesmo tempo.");
-
         // Verificar se existem partidas em curso antes de criar uma nova
-        var activeMatchId = await _repository.GetActiveMatchIdAsync(input.PlayerId);
+        var activeMatchId = await _repository.GetActiveMatchIdAsync(playerId);
         if (activeMatchId.HasValue)
             throw new UserHasActiveMatchException(activeMatchId.Value);
 
@@ -53,20 +53,20 @@ public class MatchService : IMatchService
         }
 
         // Cria a partida (Entidade de Domínio)
-        var match = new Match(input.PlayerId, input.Mode, input.AiDifficulty, input.OpponentId);
+        var match = new Match(playerId, input.Mode, input.AiDifficulty, input.OpponentId);
 
         await _repository.SaveAsync(match);
         return match.Id;
     }
 
-    public async Task SetupShipsAsync(PlaceShipsInput input)
+    public async Task SetupShipsAsync(PlaceShipsInput input, Guid playerId)
     {
         var match = await GetMatchOrThrow(input.MatchId);
 
         if (match.Status != MatchStatus.Setup)
             throw new InvalidOperationException("A partida não está na fase de preparação.");
 
-        var board = input.PlayerId == match.Player1Id ? match.Player1Board : match.Player2Board;
+        var board = playerId == match.Player1Id ? match.Player1Board : match.Player2Board;
 
         // Limpa navios anteriores se houver (para permitir reset no setup)
         board.Ships.Clear();
@@ -82,10 +82,10 @@ public class MatchService : IMatchService
         }
 
         // Marca o jogador como pronto
-        match.SetPlayerReady(input.PlayerId);
+        match.SetPlayerReady(playerId);
 
         // 2. Se for contra IA e o P1 estiver pronto, a IA monta o tabuleiro dela agora
-        if (match.Player2Id == null && input.PlayerId == match.Player1Id)
+        if (match.Player2Id == null && playerId == match.Player1Id)
         {
             SetupAiBoard(match.Player2Board);
             match.SetPlayerReady(Guid.Empty); // Guid.Empty representa a IA
@@ -94,19 +94,19 @@ public class MatchService : IMatchService
         await _repository.SaveAsync(match);
     }
 
-    public async Task<TurnResultDto> ExecutePlayerShotAsync(ShootInput input)
+    public async Task<TurnResultDto> ExecutePlayerShotAsync(ShootInput input, Guid playerId)
     {
         var match = await GetMatchOrThrow(input.MatchId);
 
         // 1. Executa o tiro do jogador (Entidade Match valida turno e regras)
-        var isHit = match.ExecuteShot(input.PlayerId, input.X, input.Y);
+        var isHit = match.ExecuteShot(playerId, input.X, input.Y);
 
         // Verifica estado pós-tiro
         var isSunk = false; // Precisaríamos verificar se o tiro afundou algo específico, 
         // mas para o retorno simples, vamos focar no estado geral ou checar o grid.
         // Otimização: O Board poderia retornar metadata do tiro, mas vamos inferir.
 
-        var targetBoard = input.PlayerId == match.Player1Id ? match.Player2Board : match.Player1Board;
+        var targetBoard = playerId == match.Player1Id ? match.Player2Board : match.Player1Board;
         // Se acertou, verificamos se o navio naquela posição afundou agora
         if (isHit)
         {

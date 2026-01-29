@@ -43,7 +43,8 @@ public class MatchController : ControllerBase
     {
         try
         {
-            var matchId = await _matchService.StartMatchAsync(input);
+            var playerId = User.GetUserId();
+            var matchId = await _matchService.StartMatchAsync(input, playerId);
             return CreatedAtAction(
                 nameof(StartMatch),
                 new { id = matchId },
@@ -111,7 +112,8 @@ public class MatchController : ControllerBase
     {
         try
         {
-            await _matchService.SetupShipsAsync(input);
+            var playerId = User.GetUserId();
+            await _matchService.SetupShipsAsync(input, playerId);
             return Ok(new { message = "Navios posicionados com sucesso. Aguardando início." });
         }
         catch (KeyNotFoundException ex)
@@ -146,7 +148,8 @@ public class MatchController : ControllerBase
     {
         try
         {
-            var result = await _matchService.ExecutePlayerShotAsync(input);
+            var playerId = User.GetUserId();
+            var result = await _matchService.ExecutePlayerShotAsync(input, playerId);
             return Ok(result);
         }
         catch (KeyNotFoundException ex)
