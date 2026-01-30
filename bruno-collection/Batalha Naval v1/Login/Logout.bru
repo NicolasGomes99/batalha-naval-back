@@ -6,12 +6,18 @@ meta {
 
 post {
   url: {{baseUrl}}/auth/logout
-  body: none
+  body: json
   auth: inherit
 }
 
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
 script:post-response {
-  // bru.setEnvVar("apiToken", "");
+  // bru.setEnvVar("accessToken", "");
 }
 
 settings {

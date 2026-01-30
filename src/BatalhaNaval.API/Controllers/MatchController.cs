@@ -1,7 +1,6 @@
 ﻿using BatalhaNaval.API.Extensions;
 using BatalhaNaval.Application.DTOs;
 using BatalhaNaval.Application.Interfaces;
-using BatalhaNaval.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,58 +40,15 @@ public class MatchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> StartMatch([FromBody] StartMatchInput input)
     {
-        try
-        {
-            var playerId = User.GetUserId();
-            var matchId = await _matchService.StartMatchAsync(input, playerId);
-            return CreatedAtAction(
-                nameof(StartMatch),
-                new { id = matchId },
-                new { matchId }
-            );
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Recurso não encontrado",
-                detail: ex.Message
-            );
-        }
-        catch (ArgumentException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Dados inválidos",
-                detail: ex.Message
-            );
-        }
-        catch (UserHasActiveMatchException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Partida em andamento",
-                detail: "Você já possui uma partida ativa. Retome-a utilizando o ID fornecido.",
-                extensions: new Dictionary<string, object?> { { "activeMatchId", ex.MatchId } }
-            );
-        }
-        catch (OpponentBusyException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Oponente indisponível",
-                detail: ex.Message
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erro ao criar partida.");
-            return Problem(
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Erro interno",
-                detail: "Ocorreu um erro inesperado ao criar a partida. Tente novamente."
-            );
-        }
+        var playerId = User.GetUserId();
+
+        var matchId = await _matchService.StartMatchAsync(input, playerId);
+
+        return CreatedAtAction(
+            nameof(StartMatch),
+            new { id = matchId },
+            new { matchId }
+        );
     }
 
     /// <summary>
@@ -110,25 +66,11 @@ public class MatchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetupShips([FromBody] PlaceShipsInput input)
     {
-        try
-        {
-            var playerId = User.GetUserId();
-            await _matchService.SetupShipsAsync(input, playerId);
-            return Ok(new { message = "Navios posicionados com sucesso. Aguardando início." });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erro ao posicionar navios.");
-            return StatusCode(500, new { error = "Erro interno ao processar setup." });
-        }
+        var playerId = User.GetUserId();
+
+        await _matchService.SetupShipsAsync(input, playerId);
+
+        return Ok(new { message = "Navios posicionados com sucesso. Aguardando início." });
     }
 
     /// <summary>
@@ -146,24 +88,11 @@ public class MatchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ExecuteShot([FromBody] ShootInput input)
     {
-        try
-        {
-            var playerId = User.GetUserId();
-            var result = await _matchService.ExecutePlayerShotAsync(input, playerId);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
-        catch (InvalidOperationException ex) // Turno errado, jogo finalizado, etc.
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-        catch (TimeoutException ex) // Tempo esgotado
-        {
-            return StatusCode(408, new { error = ex.Message });
-        }
+        var playerId = User.GetUserId();
+
+        var result = await _matchService.ExecutePlayerShotAsync(input, playerId);
+
+        return Ok(result);
     }
 
     /// <summary>
@@ -179,19 +108,9 @@ public class MatchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MoveShip([FromBody] MoveShipInput input)
     {
-        try
-        {
-            await _matchService.ExecutePlayerMoveAsync(input);
-            return Ok(new { message = "Navio movido com sucesso." });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
+        await _matchService.ExecutePlayerMoveAsync(input);
+
+        return Ok(new { message = "Navio movido com sucesso." });
     }
 
     /// <summary>

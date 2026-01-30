@@ -1,19 +1,18 @@
 meta {
-  name: Login
+  name: Refresh Token
   type: http
-  seq: 2
+  seq: 3
 }
 
 post {
-  url: {{baseUrl}}/auth/login
+  url: {{baseUrl}}/auth/refresh-token
   body: json
-  auth: none
+  auth: inherit
 }
 
 body:json {
   {
-    "username": "teste01",
-    "password": "1234567890"
+    "refreshToken": "{{refreshToken}}"
   }
 }
 

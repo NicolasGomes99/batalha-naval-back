@@ -63,6 +63,27 @@ public class GlobalExceptionHandler : IExceptionHandler
             problemDetails.Detail = exception.Message;
         }
 
+        if (exception is UserHasActiveMatchException)
+        {
+            problemDetails.Status = StatusCodes.Status409Conflict;
+            problemDetails.Title = "Partida Em Andamento";
+            problemDetails.Detail = exception.Message;
+        }
+
+        if (exception is OpponentBusyException)
+        {
+            problemDetails.Status = StatusCodes.Status409Conflict;
+            problemDetails.Title = "Oponente Indisponível";
+            problemDetails.Detail = exception.Message;
+        }
+
+        if (exception is TimeoutException)
+        {
+            problemDetails.Status = StatusCodes.Status408RequestTimeout;
+            problemDetails.Title = "Tempo Esgotado";
+            problemDetails.Detail = exception.Message;
+        }
+
         httpContext.Response.StatusCode = problemDetails.Status.Value;
 
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);

@@ -11,13 +11,15 @@ namespace BatalhaNaval.Application.Services;
 
 public class MatchService : IMatchService
 {
+    private readonly ICacheService _cacheService;
     private readonly IMatchRepository _repository;
     private readonly IUserRepository _userRepository;
 
-    public MatchService(IMatchRepository repository, IUserRepository userRepository)
+    public MatchService(IMatchRepository repository, IUserRepository userRepository, ICacheService cacheService)
     {
         _repository = repository;
         _userRepository = userRepository;
+        _cacheService = cacheService;
     }
 
     public async Task<Guid> StartMatchAsync(StartMatchInput input, Guid playerId)
@@ -64,7 +66,9 @@ public class MatchService : IMatchService
         var match = await GetMatchOrThrow(input.MatchId);
 
         if (match.Status != MatchStatus.Setup)
-            throw new InvalidOperationException("A partida não está na fase de preparação.");
+            throw new InvalidOperationException(match.Status == MatchStatus.Finished
+                ? "Partida já encerrada."
+                : "Partida em andamento.");
 
         var board = playerId == match.Player1Id ? match.Player1Board : match.Player2Board;
 
@@ -91,6 +95,7 @@ public class MatchService : IMatchService
             match.SetPlayerReady(Guid.Empty); // Guid.Empty representa a IA
         }
 
+        await _cacheService.SetAsync($"match:{match.Id}", match, TimeSpan.FromMinutes(10));
         await _repository.SaveAsync(match);
     }
 
