@@ -1,0 +1,15 @@
+﻿meta {
+  name: Users Ranking
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/Users/player_stats
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
