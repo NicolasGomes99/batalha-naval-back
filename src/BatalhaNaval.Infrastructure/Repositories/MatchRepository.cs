@@ -23,17 +23,36 @@ public class MatchRepository : IMatchRepository
 
     public async Task SaveAsync(Match match)
     {
-        // Verifica se já existe para decidir entre Add ou Update
-        var exists = await _context.Matches.AnyAsync(m => m.Id == match.Id);
+        var entry = _context.ChangeTracker.Entries<Match>()
+            .FirstOrDefault(e => e.Entity.Id == match.Id);
 
-        if (exists)
-            _context.Matches.Update(match);
-        else
-            await _context.Matches.AddAsync(match);
+        if (entry == null)
+        {
+            // Se não estava na memória, anexa.
+            _context.Matches.Attach(match);
+            entry = _context.Entry(match);
+        }
+
+        // AQUI ESTÁ A CORREÇÃO DEFINITIVA:
+        // Forçamos o EF a entender que as colunas JSONB foram alteradas,
+        // independente dele achar que o objeto é o mesmo.
+        entry.Property(p => p.Player1Board).IsModified = true;
+        entry.Property(p => p.Player2Board).IsModified = true;
+    
+        // Atualiza também as novas colunas de controle
+        entry.Property(p => p.HasMovedThisTurn).IsModified = true;
+        entry.Property(p => p.Player1Hits).IsModified = true;
+        entry.Property(p => p.Player2Hits).IsModified = true;
+        entry.Property(p => p.Player1ConsecutiveHits).IsModified = true;
+        entry.Property(p => p.Player2ConsecutiveHits).IsModified = true;
+        entry.Property(p => p.LastMoveAt).IsModified = true;
+    
+        // Se o status mudou, também marca
+        entry.Property(p => p.Status).IsModified = true;
+        entry.Property(p => p.CurrentTurnPlayerId).IsModified = true;
 
         await _context.SaveChangesAsync();
     }
-
     public async Task<PlayerProfile> GetUserProfileAsync(Guid userId)
     {
         var profile = await _context.PlayerProfiles.FindAsync(userId);

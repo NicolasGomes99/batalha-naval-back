@@ -64,49 +64,59 @@ public class MatchService : IMatchService
         return match.Id;
     }
 
-    public async Task SetupShipsAsync(PlaceShipsInput input, Guid playerId)
+public async Task SetupShipsAsync(PlaceShipsInput input, Guid playerId)
+{
+    var match = await GetMatchOrThrow(input.MatchId);
+
+    if (match.Status != MatchStatus.Setup)
+        throw new InvalidOperationException(match.Status == MatchStatus.Finished
+            ? "Partida já encerrada."
+            : "Partida em andamento.");
+
+    var board = playerId == match.Player1Id ? match.Player1Board : match.Player2Board;
+
+    // Limpa navios anteriores se houver (para permitir reset no setup)
+    board.Ships.Clear();
+
+    // 1. Posiciona os navios do Jogador
+    foreach (var shipDto in input.Ships)
     {
-        var match = await GetMatchOrThrow(input.MatchId);
-
-        if (match.Status != MatchStatus.Setup)
-            throw new InvalidOperationException(match.Status == MatchStatus.Finished
-                ? "Partida já encerrada."
-                : "Partida em andamento.");
-
-        var board = playerId == match.Player1Id ? match.Player1Board : match.Player2Board;
-
-        // Limpa navios anteriores se houver (para permitir reset no setup)
-        board.Ships.Clear();
-
-        // 1. Posiciona os navios do Jogador
-        foreach (var shipDto in input.Ships)
-        {
-            // Cria coordenadas baseadas na posição inicial e orientação
-            var coordinates = GenerateCoordinates(shipDto.StartX, shipDto.StartY, shipDto.Size, shipDto.Orientation);
-
-            var ship = new Ship(shipDto.Name, shipDto.Size, coordinates, shipDto.Orientation);
-            board.AddShip(ship);
-        }
-
-        // Marca o jogador como pronto
-        match.SetPlayerReady(playerId);
-
-        // 2. Se for contra IA e o P1 estiver pronto, a IA monta o tabuleiro dela agora
-        if (match.Player2Id == null && playerId == match.Player1Id)
-        {
-            SetupAiBoard(match.Player2Board);
-            match.SetPlayerReady(Guid.Empty); // Guid.Empty representa a IA
-        }
-
-        var matchRedis = GenerateMatchRedis(match);
-        var matchHistoryRedis = new List<MatchHistoryRedis>();
-
-        await _cacheService.SetAsync($"match:{match.Id}", matchRedis, TimeSpan.FromMinutes(60));
-
-        await _cacheService.SetAsync($"match:{match.Id}:history", matchHistoryRedis, TimeSpan.FromMinutes(60));
-
-        await _repository.SaveAsync(match);
+        var coordinates = GenerateCoordinates(shipDto.StartX, shipDto.StartY, shipDto.Size, shipDto.Orientation);
+        var ship = new Ship(shipDto.Name, shipDto.Size, coordinates, shipDto.Orientation);
+        board.AddShip(ship);
     }
+
+    // Marca o jogador como pronto
+    // NOTA: Se ambos estiverem prontos, o método SetPlayerReady internamente chama StartGame()
+    // e define aleatoriamente quem começa.
+    match.SetPlayerReady(playerId);
+
+    // 2. Se for contra IA e o P1 estiver pronto, a IA monta o tabuleiro dela agora
+    if (match.Player2Id == null && playerId == match.Player1Id)
+    {
+        SetupAiBoard(match.Player2Board);
+        match.SetPlayerReady(Guid.Empty); // Guid.Empty representa a IA
+    }
+
+    // Atualiza o Cache (Opcional: talvez precise atualizar de novo após a IA jogar, mas ok manter aqui)
+    var matchRedis = GenerateMatchRedis(match);
+    var matchHistoryRedis = new List<MatchHistoryRedis>();
+    await _cacheService.SetAsync($"match:{match.Id}", matchRedis, TimeSpan.FromMinutes(60));
+    await _cacheService.SetAsync($"match:{match.Id}:history", matchHistoryRedis, TimeSpan.FromMinutes(60));
+
+    // Salva o estado inicial (Navios posicionados, status InProgress)
+    await _repository.SaveAsync(match);
+    
+    // 3. CORREÇÃO: VERIFICAR SE A IA COMEÇA JOGANDO (KICKSTART)
+    // Se o jogo começou (InProgress), é contra a IA (Player2Id == null) 
+    // e o sorteio definiu que é a vez da IA (Guid.Empty)...
+    if (match.Status == MatchStatus.InProgress && 
+        match.Player2Id == null && 
+        match.CurrentTurnPlayerId == Guid.Empty)
+    {
+        await ProcessAiTurnLoopAsync(match);
+    }
+}
 
     public async Task<TurnResultDto> ExecutePlayerShotAsync(ShootInput input, Guid playerId)
     {
@@ -147,20 +157,16 @@ public class MatchService : IMatchService
 
         return new TurnResultDto(isHit, isSunk, match.IsFinished, match.WinnerId, isHit ? "Acertou!" : "Água.");
     }
-
-    public async Task ExecutePlayerMoveAsync(MoveShipInput input)
+    
+    public async Task ExecutePlayerMoveAsync(MoveShipInput input, Guid playerId)
     {
         var match = await GetMatchOrThrow(input.MatchId);
         // TODO Adaptar para trabalhar com o cache em partida
         var matchRedis = await GetMatchRedisOrThrow(input.MatchId);
-
-        // Executa movimento (Entidade valida regras do Modo Dinâmico)
-        match.ExecuteShipMovement(input.PlayerId, input.ShipId, input.Direction);
+        
+        match.ExecuteShipMovement(playerId, input.ShipId, input.Direction);
 
         await _repository.SaveAsync(match);
-
-        // Se for contra IA, o movimento passa a vez. A IA deve responder.
-        if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty) await ProcessAiTurnLoopAsync(match);
     }
 
     public async Task CancelMatchAsync(Guid matchId, Guid playerId)
@@ -298,11 +304,12 @@ public class MatchService : IMatchService
         // Configuração Padrão da Frota
         var fleetSpecs = new List<(string Name, int Size)>
         {
-            ("Porta-Aviões", 5),
-            ("Encouraçado", 4),
-            ("Submarino", 3),
-            ("Destroyer", 3),
-            ("Patrulha", 2)
+            ("Porta-Aviões", 6),
+            ("Porta-Aviões", 6),
+            ("Navio de Guerra", 4),
+            ("Navio de Guerra", 4),
+            ("Encouraçado", 3),
+            ("Submarino", 1)
         };
 
         var random = new Random();
@@ -440,5 +447,72 @@ public class MatchService : IMatchService
             "Vertical" => ShipOrientationRedis.VERTICAL,
             _ => ShipOrientationRedis.HORIZONTAL
         };
+    }
+    
+    public async Task<MatchGameStateDto> GetMatchStateAsync(Guid matchId, Guid playerId)
+    {
+        var match = await GetMatchOrThrow(matchId);
+
+        // Verifica se o usuário faz parte da partida
+        if (match.Player1Id != playerId && match.Player2Id != playerId)
+            throw new UnauthorizedAccessException("Você não tem permissão para visualizar esta partida.");
+
+        var isPlayer1 = match.Player1Id == playerId;
+    
+        // Define quem é quem
+        var myBoard = isPlayer1 ? match.Player1Board : match.Player2Board;
+        var opponentBoard = isPlayer1 ? match.Player2Board : match.Player1Board;
+
+        // Estatísticas
+        var stats = new MatchStatsDto(
+            MyHits: isPlayer1 ? match.Player1Hits : match.Player2Hits,
+            MyStreak: isPlayer1 ? match.Player1ConsecutiveHits : match.Player2ConsecutiveHits,
+            OpponentHits: isPlayer1 ? match.Player2Hits : match.Player1Hits,
+            OpponentStreak: isPlayer1 ? match.Player2ConsecutiveHits : match.Player1ConsecutiveHits
+        );
+
+        return new MatchGameStateDto(
+            MatchId: match.Id,
+            Status: match.Status,
+            CurrentTurnPlayerId: match.CurrentTurnPlayerId,
+            IsMyTurn: match.CurrentTurnPlayerId == playerId,
+            WinnerId: match.WinnerId,
+            MyBoard: MapMyBoard(myBoard),           // Vê tudo
+            OpponentBoard: MapOpponentBoard(opponentBoard), // Vê mascarado (Fog of War)
+            Stats: stats
+        );
+    }
+    
+    // Mapeia meu tabuleiro (Vejo meus navios e onde o inimigo atirou)
+    private BoardStateDto MapMyBoard(Board board)
+    {
+        var shipsDto = board.Ships.Select(s => new ShipDto(
+            s.Id, s.Name, s.Size, s.IsSunk, s.Orientation,
+            s.Coordinates.Select(c => new CoordinateDto(c.X, c.Y, c.IsHit)).ToList()
+        )).ToList();
+
+        return new BoardStateDto(board.Cells, shipsDto);
+    }
+
+// Mapeia tabuleiro inimigo (FOG OF WAR)
+    private BoardStateDto MapOpponentBoard(Board board)
+    {
+        // 1. Mascaramento da Grade:
+        // Se a célula for SHIP (1), transformamos em WATER (0) visualmente. Assim o front só recebe Água, Hit ou Missed. Nunca recebe Ship.
+        var maskedGrid = board.Cells.Select(row => 
+            row.Select(cell => cell == CellState.Ship ? CellState.Water : cell).ToList()
+        ).ToList();
+
+        // 2. Ocultação de Navios:
+        // Por segurança máxima, retornamos NULL ou vazio.
+        var visibleShips = board.Ships
+            .Where(s => s.IsSunk) // Só mostramos navios que já afundamos
+            .Select(s => new ShipDto(
+                s.Id, s.Name, s.Size, s.IsSunk, s.Orientation,
+                s.Coordinates.Select(c => new CoordinateDto(c.X, c.Y, c.IsHit)).ToList()
+            ))
+            .ToList();
+
+        return new BoardStateDto(maskedGrid, visibleShips);
     }
 }

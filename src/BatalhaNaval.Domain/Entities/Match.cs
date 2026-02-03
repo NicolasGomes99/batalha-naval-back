@@ -6,14 +6,30 @@ namespace BatalhaNaval.Domain.Entities;
 
 public class Match
 {
-    // Controle de prontidão
     private bool _player1Ready;
-    private bool _player2Ready; // Se for IA, já começa true ou logicamente tratado
+    private bool _player2Ready;
+
+    // Estatísticas de Jogo
+    
+    [Column("player1_hits")]
     public int Player1Hits { get; private set; }
+    
+    [Column("player2_hits")]
     public int Player2Hits { get; private set; }
+    
+    // NOVA PROPRIEDADE: Controle de Streak (Acertos Consecutivos)
+    [Column("player1_consecutive_hits")]
+    public int Player1ConsecutiveHits { get; private set; }
+    
+    [Column("player2_consecutive_hits")]
+    public int Player2ConsecutiveHits { get; private set; }
+    
+    [Column("has_moved_this_turn")]
+    public bool HasMovedThisTurn { get; private set; }
 
     public Match(Guid player1Id, GameMode mode, Difficulty? aiDifficulty = null, Guid? player2Id = null)
     {
+        Id = Guid.NewGuid();
         Player1Id = player1Id;
         Player2Id = player2Id;
         Mode = mode;
@@ -23,11 +39,12 @@ public class Match
         Player1Board = new Board();
         Player2Board = new Board();
 
-        CurrentTurnPlayerId = player1Id; // P1 começa o setup, ou aleatório no início do jogo
+        // A decisão de quem começa jogando pra valer fica no StartGame.
+        CurrentTurnPlayerId = player1Id;
     }
 
     [Description("Identificador único da partida")]
-    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid Id { get; private set; }
 
     [Description("Identificador único do jogador 1")]
     public Guid Player1Id { get; }
@@ -41,15 +58,18 @@ public class Match
     [Description("Tabuleiro do jogador 2")]
     public Board Player2Board { get; }
 
-    [Description("Modo de jogo")] public GameMode Mode { get; }
+    [Description("Modo de jogo")] 
+    public GameMode Mode { get; }
 
     [Description("Dificuldade da IA, se aplicável")]
     public Difficulty? AiDifficulty { get; private set; }
 
     [Description("Status atual da partida")]
+    [Column("status")]
     public MatchStatus Status { get; set; }
 
     [Description("Indica se a partida está finalizada")]
+    [Column("is_finished")]
     public bool IsFinished => Status == MatchStatus.Finished;
 
     [Description("Hora de encerramento da partida")]
@@ -86,8 +106,22 @@ public class Match
         Status = MatchStatus.InProgress;
         StartedAt = DateTime.UtcNow;
         LastMoveAt = DateTime.UtcNow;
-        // P1 sempre começa atirando? Ou random? Vamos assumir P1 por padrão.
-        CurrentTurnPlayerId = Player1Id;
+
+        var random = new Random();
+        // Se 0, começa P1. Se 1, começa P2 (ou IA representada por Guid.Empty)
+        var starter = random.Next(2);
+
+        if (starter == 0)
+        {
+            CurrentTurnPlayerId = Player1Id;
+        }
+        else
+        {
+            // Se P2 for null, é IA (Guid.Empty)
+            CurrentTurnPlayerId = Player2Id ?? Guid.Empty;
+        }
+        // NOVO: Reseta flag de movimento para o primeiro turno
+        HasMovedThisTurn = false;
     }
 
     // Ação 1: Atirar
@@ -97,29 +131,50 @@ public class Match
 
         var targetBoard = playerId == Player1Id ? Player2Board : Player1Board;
 
-        // Verifica se o tiro é válido (não repetido)
-        // Se retornar false (tiro repetido), não troca o turno, apenas avisa (tratamento na App Layer)
-        var result = targetBoard.ReceiveShot(x, y);
+        // O Board deve lançar exceção se o tiro for repetido
+        bool isHit = targetBoard.ReceiveShot(x, y);
 
-        // Se acertou água (CellState.Missed), passa a vez.
-        // Se acertou navio (CellState.Hit), mantém a vez (Regra: "Caso acerte... pode jogar outra bomba")
-        var cellState = targetBoard.Cells[x][y];
-        var hitShip = cellState == CellState.Hit;
+        // 2. Atualização de Estatísticas (Total e Consecutivo)
+        if (isHit)
+        {
+            if (playerId == Player1Id)
+            {
+                Player1Hits++;
+                Player1ConsecutiveHits++;
+            }
+            else
+            {
+                Player2Hits++;
+                Player2ConsecutiveHits++;
+            }
+        }
+        else
+        {
+            // Errou o tiro: Reseta o Streak do jogador atual
+            if (playerId == Player1Id) Player1ConsecutiveHits = 0;
+            else Player2ConsecutiveHits = 0;
+        }
 
-		if (hitShip) {
-        if (playerId == Player1Id) Player1Hits++;
-        else Player2Hits++;
-    	}
-
+        // 3. Verificação de Vitória ou Troca de Turno
         if (targetBoard.AllShipsSunk())
+        {
             FinishGame(playerId);
-        else if (!hitShip) SwitchTurn();
+        }
+        else if (!isHit)
+        {
+            // Se errar, passa a vez.
+            SwitchTurn();
+        }
+        else
+        {
+            HasMovedThisTurn = false;
+        }
 
         LastMoveAt = DateTime.UtcNow;
-        return hitShip;
+        return isHit;
     }
 
-    // Ação 2: Mover Navio (Apenas Modo Dinâmico)
+    // Mover Navio (Apenas Modo Dinâmico)
     public void ExecuteShipMovement(Guid playerId, Guid shipId, MoveDirection direction)
     {
         if (Mode != GameMode.Dynamic)
@@ -127,13 +182,16 @@ public class Match
 
         ValidateTurn(playerId);
 
+        if (HasMovedThisTurn)
+            throw new InvalidOperationException("Você já realizou um movimento neste turno. Agora deve atirar.");
+
         var myBoard = playerId == Player1Id ? Player1Board : Player2Board;
 
         // Tenta mover. Se falhar (colisão/navio atingido), o Board lança exceção e o turno NÃO muda.
         myBoard.MoveShip(shipId, direction);
 
-        // Se mover com sucesso, o turno ACABA imediatamente (ao contrário do tiro que pode repetir)
-        SwitchTurn();
+        HasMovedThisTurn = true;
+        //Atualizamos o tempo para evitar Timeout enquanto o jogador pensa no tiro
         LastMoveAt = DateTime.UtcNow;
     }
 
@@ -141,13 +199,16 @@ public class Match
     {
         if (Status != MatchStatus.InProgress) throw new InvalidOperationException("A partida não está em andamento.");
         if (IsFinishedOrTimeout()) throw new InvalidOperationException("Partida finalizada ou tempo esgotado.");
-        if (playerId != CurrentTurnPlayerId) throw new InvalidOperationException("Não é o seu turno.");
+        
+        // Verifica se é o turno do jogador (Permite IA jogar se playerId for Empty)
+        if (playerId != Guid.Empty && playerId != CurrentTurnPlayerId) 
+            throw new InvalidOperationException("Não é o seu turno.");
 
-        // Validação de tempo (30s)
-        if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 3001) // esse tempo DEVE SER 31
+        // Validação de tempo corrigida (30s de tolerância + 1s de margem)
+        if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 31) 
         {
-            SwitchTurn();
-            throw new TimeoutException("Tempo de jogada esgotado. Vez passada.");
+            SwitchTurn(); // Penalidade por tempo: perde a vez
+            // Opcional: throw new TimeoutException("Tempo esgotado.");
         }
     }
 
@@ -159,13 +220,17 @@ public class Match
     private void SwitchTurn()
     {
         CurrentTurnPlayerId = CurrentTurnPlayerId == Player1Id
-            ? Player2Id ?? Guid.Empty
-            : Player1Id;
+            ? Player2Id ?? Guid.Empty // Passa para P2 ou IA
+            : Player1Id;              // Passa para P1
+        
+        HasMovedThisTurn = false;
     }
 
     private void FinishGame(Guid winnerId)
     {
         Status = MatchStatus.Finished;
         WinnerId = winnerId;
+        FinishedAt = DateTime.UtcNow;
+        CurrentTurnPlayerId = Guid.Empty; // Ninguém mais joga
     }
 }
