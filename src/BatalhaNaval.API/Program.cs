@@ -63,9 +63,6 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException(
         "A ConnectionString 'DefaultConnection' não foi encontrada no appsettings.json.");
 
-builder.Services.AddDbContext<BatalhaNavalDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
 // ==================================================================
 // 2. Injeção de Dependência (DI)
 // ==================================================================
@@ -235,3 +232,7 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Iniciando Batalha Naval API - .NET 10");
 
 app.Run();
+
+public partial class Program
+{
+}
