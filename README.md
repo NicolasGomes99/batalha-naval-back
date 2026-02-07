@@ -52,4 +52,5 @@ A solução foi projetada utilizando uma arquitetura distribuída para separar r
 * Nicolas Gabriel Vieira do Nascimento Gomes
 * José Portela da Silva Neto
 * Julio Antonio de Cerqueira Neto
+* Pedro Tobias Souza Guerra
 *  --nome dos demais...
