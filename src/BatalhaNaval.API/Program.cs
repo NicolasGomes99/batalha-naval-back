@@ -23,7 +23,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("front-cors",policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
 builder.Services.AddAuthentication(x =>
     {
         x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -245,6 +256,8 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+app.UseCors("front-cors");
+
 app.MapControllers();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -263,3 +276,7 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Iniciando Batalha Naval API - .NET 10");
 
 app.Run();
+
+public partial class Program
+{
+}
