@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations.Schema;
 using BatalhaNaval.Domain.Enums;
+using System.Linq;
+using BatalhaNaval.Domain.ValueObjects;
 
 namespace BatalhaNaval.Domain.Entities;
 
@@ -9,7 +11,9 @@ public class Match
     private bool _player1Ready;
     private bool _player2Ready;
 
-    // Estatísticas de Jogo
+    // ====================================================================
+    // ESTATÍSTICAS E CONTROLE DE ESTADO
+    // ====================================================================
     
     [Column("player1_hits")]
     public int Player1Hits { get; private set; }
@@ -17,7 +21,6 @@ public class Match
     [Column("player2_hits")]
     public int Player2Hits { get; private set; }
     
-    // NOVA PROPRIEDADE: Controle de Streak (Acertos Consecutivos)
     [Column("player1_consecutive_hits")]
     public int Player1ConsecutiveHits { get; private set; }
     
@@ -26,6 +29,10 @@ public class Match
     
     [Column("has_moved_this_turn")]
     public bool HasMovedThisTurn { get; private set; }
+
+    // ====================================================================
+    // CONSTRUTOR
+    // ====================================================================
 
     public Match(Guid player1Id, GameMode mode, Difficulty? aiDifficulty = null, Guid? player2Id = null)
     {
@@ -39,9 +46,12 @@ public class Match
         Player1Board = new Board();
         Player2Board = new Board();
 
-        // A decisão de quem começa jogando pra valer fica no StartGame.
         CurrentTurnPlayerId = player1Id;
     }
+
+    // ====================================================================
+    // PROPRIEDADES PRINCIPAIS
+    // ====================================================================
 
     [Description("Identificador único da partida")]
     public Guid Id { get; private set; }
@@ -53,10 +63,10 @@ public class Match
     public Guid? Player2Id { get; }
 
     [Description("Tabuleiro do jogador 1")]
-    public Board Player1Board { get; }
+    public Board Player1Board { get; private set; }
 
     [Description("Tabuleiro do jogador 2")]
-    public Board Player2Board { get; }
+    public Board Player2Board { get; private set; }
 
     [Description("Modo de jogo")] 
     public GameMode Mode { get; }
@@ -83,12 +93,189 @@ public class Match
     public Guid? WinnerId { get; set; }
 
     [Description("Data e hora de início da partida")]
-    public DateTime StartedAt { get; private set; } // Quando o status muda para InProgress
+    public DateTime StartedAt { get; private set; } 
 
     [Description("Data e hora do último movimento")]
     public DateTime LastMoveAt { get; private set; }
 
-    // Método chamado quando o jogador termina de posicionar navios
+    // ====================================================================
+    // MÉTODOS DE SUPORTE AO REDIS (MAPPING)
+    // ====================================================================
+
+    public MatchRedis ToRedisDto()
+    {
+        return new MatchRedis
+        {
+            MatchId = this.Id.ToString(),
+            Player1Id = this.Player1Id.ToString(),
+            Player2Id = this.Player2Id?.ToString(),
+            GameMode = MapGameModeToRedis(this.Mode),
+            AiDifficulty = this.AiDifficulty.HasValue ? MapDifficultyToRedis(this.AiDifficulty.Value) : null,
+            Status = MapStatusToRedis(this.Status),
+            
+            TurnPlayerId = this.CurrentTurnPlayerId.ToString(),
+            TurnStartedAt = new DateTimeOffset(this.LastMoveAt).ToUnixTimeSeconds(),
+            
+            // Mapeia Stats
+            P1_Stats = new PlayerStatsRedis 
+            { 
+                Hits = this.Player1Hits, 
+                Streak = this.Player1ConsecutiveHits 
+            },
+            P2_Stats = new PlayerStatsRedis 
+            { 
+                Hits = this.Player2Hits, 
+                Streak = this.Player2ConsecutiveHits 
+            },
+
+            // Mapeia Tabuleiros
+            Boards = new MatchBoardsRedis
+            {
+                P1 = MapBoardToRedis(this.Player1Board),
+                P2 = MapBoardToRedis(this.Player2Board)
+            }
+        };
+    }
+
+    public static Match FromRedisDto(MatchRedis dto)
+    {
+        // 1. Converte Enums e IDs de volta
+        var p1Id = Guid.Parse(dto.Player1Id);
+        var p2Id = string.IsNullOrEmpty(dto.Player2Id) ? (Guid?)null : Guid.Parse(dto.Player2Id);
+        var mode = MapGameModeFromRedis(dto.GameMode);
+        var difficulty = dto.AiDifficulty.HasValue ? MapDifficultyFromRedis(dto.AiDifficulty.Value) : (Difficulty?)null;
+
+        // 2. Cria instância
+        var match = new Match(p1Id, mode, difficulty, p2Id);
+
+        // 3. Hidrata propriedades
+        match.Id = Guid.Parse(dto.MatchId);
+        match.Status = MapStatusFromRedis(dto.Status);
+        match.CurrentTurnPlayerId = string.IsNullOrEmpty(dto.TurnPlayerId) ? Guid.Empty : Guid.Parse(dto.TurnPlayerId);
+        match.LastMoveAt = DateTimeOffset.FromUnixTimeSeconds(dto.TurnStartedAt).UtcDateTime;
+        
+        // Stats
+        match.Player1Hits = dto.P1_Stats.Hits;
+        match.Player1ConsecutiveHits = dto.P1_Stats.Streak;
+        match.Player2Hits = dto.P2_Stats.Hits;
+        match.Player2ConsecutiveHits = dto.P2_Stats.Streak;
+
+        // Tabuleiros
+        match.Player1Board = MapBoardFromRedis(dto.Boards.P1);
+        match.Player2Board = MapBoardFromRedis(dto.Boards.P2);
+
+        return match;
+    }
+
+    // --- Helpers de Mapeamento (Privados) ---
+
+    private PlayerBoardRedis MapBoardToRedis(Board board)
+    {
+        var redisBoard = new PlayerBoardRedis
+        {
+            AliveShips = board.Ships.Count(s => !s.IsSunk),
+            OceanGrid = new Dictionary<string, int>()
+        };
+        
+        for (int x = 0; x < Board.Size; x++)
+        {
+            for (int y = 0; y < Board.Size; y++)
+            {
+                var cell = board.Cells[x][y];
+                // Mapeamos apenas o que não é água
+                if (cell == CellState.Hit) redisBoard.OceanGrid[$"{x},{y}"] = 1;
+                else if (cell == CellState.Missed) redisBoard.OceanGrid[$"{x},{y}"] = 0;
+            }
+        }
+
+        // Mapeia Navios
+        redisBoard.Ships = board.Ships.Select(s => new ShipRedis
+        {
+            Id = s.Name.GetHashCode(), 
+            Type = s.Name,
+            Size = s.Size,
+            Sunk = s.IsSunk,
+            Orientation = s.Orientation == ShipOrientation.Horizontal ? ShipOrientationRedis.HORIZONTAL : ShipOrientationRedis.VERTICAL,
+            Segments = s.Coordinates.Select(c => new ShipSegmentRedis 
+            { 
+                X = c.X, 
+                Y = c.Y, 
+                Hit = c.IsHit 
+            }).ToList()
+        }).ToList();
+
+        return redisBoard;
+    }
+
+    private static Board MapBoardFromRedis(PlayerBoardRedis dto)
+    {
+        var board = new Board();
+        
+        // 1. Reconstrói os Navios (No tabuleiro limpo)
+        // Isso evita que o AddShip falhe ao encontrar uma célula já marcada como Hit
+        foreach (var shipDto in dto.Ships)
+        {
+            var coords = shipDto.Segments.Select(s => new Coordinate(s.X, s.Y) { IsHit = s.Hit }).ToList();
+            var orientation = shipDto.Orientation == ShipOrientationRedis.HORIZONTAL ? ShipOrientation.Horizontal : ShipOrientation.Vertical;
+            
+            var ship = new Ship(shipDto.Type, shipDto.Size, coords, orientation);
+            board.AddShip(ship);
+        }
+
+        // 2. Aplica o estado do Grid (Hits e Misses) por cima
+        foreach (var kvp in dto.OceanGrid)
+        {
+            var coords = kvp.Key.Split(',');
+            int x = int.Parse(coords[0]);
+            int y = int.Parse(coords[1]);
+            // 1 = Hit, 0 = Missed
+            // Aqui sobrescrevemos o estado da célula, o que é permitido
+            board.Cells[x][y] = kvp.Value == 1 ? CellState.Hit : CellState.Missed;
+        }
+
+        return board;
+    }
+
+    // Mappers de Enum
+    private static GameModeRedis MapGameModeToRedis(GameMode mode) => mode == GameMode.Classic ? GameModeRedis.CLASSIC : GameModeRedis.DYNAMIC;
+    private static GameMode MapGameModeFromRedis(GameModeRedis mode) => mode == GameModeRedis.CLASSIC ? GameMode.Classic : GameMode.Dynamic;
+
+    private static MatchStatusRedis MapStatusToRedis(MatchStatus status) => status switch
+    {
+        MatchStatus.Setup => MatchStatusRedis.SETUP,
+        MatchStatus.InProgress => MatchStatusRedis.IN_PROGRESS,
+        MatchStatus.Finished => MatchStatusRedis.FINISHED,
+        _ => MatchStatusRedis.SETUP
+    };
+
+    private static MatchStatus MapStatusFromRedis(MatchStatusRedis status) => status switch
+    {
+        MatchStatusRedis.SETUP => MatchStatus.Setup,
+        MatchStatusRedis.IN_PROGRESS => MatchStatus.InProgress,
+        MatchStatusRedis.FINISHED => MatchStatus.Finished,
+        _ => MatchStatus.Setup
+    };
+
+    private static AiDifficultyRedis MapDifficultyToRedis(Difficulty diff) => diff switch
+    {
+        Difficulty.Basic => AiDifficultyRedis.BASIC,
+        Difficulty.Intermediate => AiDifficultyRedis.INTERMEDIATE,
+        Difficulty.Advanced => AiDifficultyRedis.ADVANCED,
+        _ => AiDifficultyRedis.BASIC
+    };
+
+    private static Difficulty MapDifficultyFromRedis(AiDifficultyRedis diff) => diff switch
+    {
+        AiDifficultyRedis.BASIC => Difficulty.Basic,
+        AiDifficultyRedis.INTERMEDIATE => Difficulty.Intermediate,
+        AiDifficultyRedis.ADVANCED => Difficulty.Advanced,
+        _ => Difficulty.Basic
+    };
+
+    // ====================================================================
+    // LÓGICA DE NEGÓCIO
+    // ====================================================================
+
     public void SetPlayerReady(Guid playerId)
     {
         if (Status != MatchStatus.Setup) return;
@@ -96,7 +283,6 @@ public class Match
         if (playerId == Player1Id) _player1Ready = true;
         else if (playerId == Player2Id) _player2Ready = true;
 
-        // Verifica se pode iniciar o jogo
         var isAiGame = Player2Id == null;
         if (_player1Ready && (_player2Ready || isAiGame)) StartGame();
     }
@@ -108,7 +294,6 @@ public class Match
         LastMoveAt = DateTime.UtcNow;
 
         var random = new Random();
-        // Se 0, começa P1. Se 1, começa P2 (ou IA representada por Guid.Empty)
         var starter = random.Next(2);
 
         if (starter == 0)
@@ -117,24 +302,20 @@ public class Match
         }
         else
         {
-            // Se P2 for null, é IA (Guid.Empty)
             CurrentTurnPlayerId = Player2Id ?? Guid.Empty;
         }
-        // NOVO: Reseta flag de movimento para o primeiro turno
+        
         HasMovedThisTurn = false;
     }
 
-    // Ação 1: Atirar
     public bool ExecuteShot(Guid playerId, int x, int y)
     {
         ValidateTurn(playerId);
 
         var targetBoard = playerId == Player1Id ? Player2Board : Player1Board;
 
-        // O Board deve lançar exceção se o tiro for repetido
         bool isHit = targetBoard.ReceiveShot(x, y);
 
-        // 2. Atualização de Estatísticas (Total e Consecutivo)
         if (isHit)
         {
             if (playerId == Player1Id)
@@ -150,19 +331,16 @@ public class Match
         }
         else
         {
-            // Errou o tiro: Reseta o Streak do jogador atual
             if (playerId == Player1Id) Player1ConsecutiveHits = 0;
             else Player2ConsecutiveHits = 0;
         }
 
-        // 3. Verificação de Vitória ou Troca de Turno
         if (targetBoard.AllShipsSunk())
         {
             FinishGame(playerId);
         }
         else if (!isHit)
         {
-            // Se errar, passa a vez.
             SwitchTurn();
         }
         else
@@ -174,7 +352,6 @@ public class Match
         return isHit;
     }
 
-    // Mover Navio (Apenas Modo Dinâmico)
     public void ExecuteShipMovement(Guid playerId, Guid shipId, MoveDirection direction)
     {
         if (Mode != GameMode.Dynamic)
@@ -187,11 +364,9 @@ public class Match
 
         var myBoard = playerId == Player1Id ? Player1Board : Player2Board;
 
-        // Tenta mover. Se falhar (colisão/navio atingido), o Board lança exceção e o turno NÃO muda.
         myBoard.MoveShip(shipId, direction);
 
         HasMovedThisTurn = true;
-        //Atualizamos o tempo para evitar Timeout enquanto o jogador pensa no tiro
         LastMoveAt = DateTime.UtcNow;
     }
 
@@ -200,15 +375,12 @@ public class Match
         if (Status != MatchStatus.InProgress) throw new InvalidOperationException("A partida não está em andamento.");
         if (IsFinishedOrTimeout()) throw new InvalidOperationException("Partida finalizada ou tempo esgotado.");
         
-        // Verifica se é o turno do jogador (Permite IA jogar se playerId for Empty)
         if (playerId != Guid.Empty && playerId != CurrentTurnPlayerId) 
             throw new InvalidOperationException("Não é o seu turno.");
 
-        // Validação de tempo corrigida (30s de tolerância + 1s de margem)
         if (DateTime.UtcNow.Subtract(LastMoveAt).TotalSeconds > 31) 
         {
-            SwitchTurn(); // Penalidade por tempo: perde a vez
-            // Opcional: throw new TimeoutException("Tempo esgotado.");
+            SwitchTurn(); 
         }
     }
 
@@ -220,8 +392,8 @@ public class Match
     private void SwitchTurn()
     {
         CurrentTurnPlayerId = CurrentTurnPlayerId == Player1Id
-            ? Player2Id ?? Guid.Empty // Passa para P2 ou IA
-            : Player1Id;              // Passa para P1
+            ? Player2Id ?? Guid.Empty 
+            : Player1Id;
         
         HasMovedThisTurn = false;
     }
@@ -231,6 +403,6 @@ public class Match
         Status = MatchStatus.Finished;
         WinnerId = winnerId;
         FinishedAt = DateTime.UtcNow;
-        CurrentTurnPlayerId = Guid.Empty; // Ninguém mais joga
+        CurrentTurnPlayerId = Guid.Empty;
     }
 }

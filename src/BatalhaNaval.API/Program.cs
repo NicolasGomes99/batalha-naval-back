@@ -105,6 +105,7 @@ builder.Services.AddDbContext<BatalhaNavalDbContext>(options =>
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMedalRepository, MedalRepository>();
+builder.Services.AddScoped<IMatchStateRepository, MatchStateRepository>();
 
 // Aplicação (Quem detém a lógica de orquestração e IA)
 builder.Services.AddScoped<IMatchService, MatchService>();
