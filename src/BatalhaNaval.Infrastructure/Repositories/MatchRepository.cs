@@ -23,13 +23,51 @@ public class MatchRepository : IMatchRepository
 
     public async Task SaveAsync(Match match)
     {
-        // Verifica se já existe para decidir entre Add ou Update
-        var exists = await _context.Matches.AnyAsync(m => m.Id == match.Id);
+        // 1. Verifica se a entidade já está sendo rastreada na memória pelo EF
+        var entry = _context.ChangeTracker.Entries<Match>()
+            .FirstOrDefault(e => e.Entity.Id == match.Id);
 
-        if (exists)
-            _context.Matches.Update(match);
+        if (entry != null)
+        {
+            // CENÁRIO A: A entidade já está na memória (Tracked).
+            // Isso acontece quando carregamos via GetByIdAsync e modificamos.
+            // AÇÃO: Forçamos a marcação de 'Modified' nas colunas críticas (JSON)
+            
+            entry.State = EntityState.Modified; // Marca tudo como modificado por segurança
+
+            // Força explicitamente as propriedades JSON
+            entry.Property(p => p.Player1Board).IsModified = true;
+            entry.Property(p => p.Player2Board).IsModified = true;
+            
+            // Força propriedades de estado que mudam frequentemente
+            entry.Property(p => p.Status).IsModified = true;
+            entry.Property(p => p.CurrentTurnPlayerId).IsModified = true;
+            entry.Property(p => p.LastMoveAt).IsModified = true;
+            entry.Property(p => p.HasMovedThisTurn).IsModified = true;
+            entry.Property(p => p.Player1Hits).IsModified = true;
+            entry.Property(p => p.Player2Hits).IsModified = true;
+            entry.Property(p => p.Player1ConsecutiveHits).IsModified = true;
+            entry.Property(p => p.Player2ConsecutiveHits).IsModified = true;
+        }
         else
-            await _context.Matches.AddAsync(match);
+        {
+            // CENÁRIO B: A entidade NÃO está na memória (Detached).
+            // Isso acontece em 'StartMatch' (Objeto Novo) ou quando vem do Redis (Objeto Reconstruído).
+            // AÇÃO: Verificar no banco se é INSERT ou UPDATE.
+
+            var exists = await _context.Matches.AnyAsync(m => m.Id == match.Id);
+
+            if (exists)
+            {
+                // Se JÁ EXISTE no banco -> UPDATE
+                _context.Matches.Update(match);
+            }
+            else
+            {
+                // Se NÃO EXISTE no banco -> INSERT
+                await _context.Matches.AddAsync(match);
+            }
+        }
 
         await _context.SaveChangesAsync();
     }
@@ -38,12 +76,10 @@ public class MatchRepository : IMatchRepository
     {
         var profile = await _context.PlayerProfiles.FindAsync(userId);
 
-        // Se o perfil não existir, cria um novo em memória (será salvo depois)
         if (profile == null)
         {
             profile = new PlayerProfile { UserId = userId };
             await _context.PlayerProfiles.AddAsync(profile);
-            // Salva logo para garantir que existe na próxima busca
             await _context.SaveChangesAsync();
         }
 

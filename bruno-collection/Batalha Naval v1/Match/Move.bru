@@ -1,11 +1,11 @@
 meta {
-  name: Atirar
+  name: Move
   type: http
-  seq: 4
+  seq: 6
 }
 
 post {
-  url: {{baseUrl}}/match/shot
+  url: {{baseUrl}}/match/move
   body: json
   auth: inherit
 }
@@ -13,8 +13,8 @@ post {
 body:json {
   {
     "matchId": "{{matchId}}",
-    "x": 9,
-    "y": 5
+    "ShipId": "61573c55-2b96-4171-84b5-c3d8ad22302e",
+    "moveDirection": "West"
   }
 }
 

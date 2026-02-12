@@ -4,10 +4,13 @@ using System.Text.Json.Serialization;
 using BatalhaNaval.API.Middlewares;
 using BatalhaNaval.Application.Interfaces;
 using BatalhaNaval.Application.Services;
+using BatalhaNaval.Application.Validators;
 using BatalhaNaval.Domain.Interfaces;
 using BatalhaNaval.Infrastructure.Persistence;
 using BatalhaNaval.Infrastructure.Repositories;
 using BatalhaNaval.Infrastructure.Services;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -74,11 +77,35 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException(
         "A ConnectionString 'DefaultConnection' não foi encontrada no appsettings.json.");
 
+// TODO avaliar unificação da configuração do DbContext para evitar conflitos (comentado abaixo)
+builder.Services.AddDbContext<BatalhaNavalDbContext>(options => 
+    options.UseNpgsql(connectionString));
+
+// builder.Services.AddDbContext<BatalhaNavalDbContext>(options =>
+// {
+//     options.UseNpgsql(connectionString, npgsqlOptions =>
+//     {
+//         npgsqlOptions.EnableRetryOnFailure(
+//             5,
+//             TimeSpan.FromSeconds(10),
+//             null);
+//     });
+//
+//     if (builder.Environment.IsDevelopment())
+//     {
+//         options.EnableSensitiveDataLogging();
+//         options.EnableDetailedErrors();
+//     }
+// });
+
 // ==================================================================
 // 2. Injeção de Dependência (DI)
 // ==================================================================
 // Infraestrutura (Quem implementa o acesso a dados)
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IMedalRepository, MedalRepository>();
+builder.Services.AddScoped<IMatchStateRepository, MatchStateRepository>();
 
 // Aplicação (Quem detém a lógica de orquestração e IA)
 builder.Services.AddScoped<IMatchService, MatchService>();
@@ -96,6 +123,11 @@ builder.Services.AddControllers()
         // Ignora campos nulos no JSON de resposta para economizar banda
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
+
+// FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<PlaceShipsValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ShootInputValidator>();
 
 // ==================================================================
 // 4. Configuração da Documentação (OpenAPI / Scalar)

@@ -108,7 +108,9 @@ public class MatchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MoveShip([FromBody] MoveShipInput input)
     {
-        await _matchService.ExecutePlayerMoveAsync(input);
+        var playerId = User.GetUserId();
+        
+        await _matchService.ExecutePlayerMoveAsync(input, playerId);
 
         return Ok(new { message = "Navio movido com sucesso." });
     }
@@ -138,5 +140,24 @@ public class MatchController : ControllerBase
         await _matchService.CancelMatchAsync(id, playerId);
 
         return NoContent();
+    }
+    
+    /// <summary>
+    ///     Obtém o estado atual da partida (Com Fog of War).
+    /// </summary>
+    /// <remarks>
+    ///     Retorna o tabuleiro do jogador completo e o do oponente mascarado (apenas tiros visíveis).
+    /// </remarks>
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(MatchGameStateDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMatchState(Guid id)
+    {
+        var playerId = User.GetUserId();
+        
+        var state = await _matchService.GetMatchStateAsync(id, playerId);
+        
+        return Ok(state);
     }
 }
