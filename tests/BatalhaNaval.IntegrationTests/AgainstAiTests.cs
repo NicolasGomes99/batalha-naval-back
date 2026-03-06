@@ -21,15 +21,15 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
     private const string Endpoint = "/match";
     private const string EndpointSetup = $"{Endpoint}/setup";
     private const string EndpointShot = $"{Endpoint}/shot";
-    private readonly ITestOutputHelper _output;
     private readonly HttpClient _client;
     private readonly IntegrationTestWebAppFactory _factory;
+    private readonly ITestOutputHelper _output;
 
     private TokenResponseDto _authInfoUsuario;
-    private Guid _usuarioId;
     private Guid _matchId;
+    private Guid _usuarioId;
 
-    public AgainstAiTests(IntegrationTestWebAppFactory factory,ITestOutputHelper output)
+    public AgainstAiTests(IntegrationTestWebAppFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _client = factory.CreateClient();
@@ -69,10 +69,40 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
 
         // STEP 4: Validar a Base de Dados (Finalização do Jogo e Estatísticas)
         await Passo_ValidarFimDeJogoNoBancoDeDadosFuzilarTabuleiroDaIA();
-        
+
         //STEP 5:
         await Passo_ValidarFimDeJogoNoRedisFuzilarTabuleiroDaIA();
-        
+    }
+
+    private List<ShipPlacementDto> GetDefaultFleet()
+    {
+        return new List<ShipPlacementDto>
+        {
+            new("Porta-Aviões", 6, 0, 0, ShipOrientation.Horizontal),
+            new("Porta-Aviões", 6, 0, 1, ShipOrientation.Horizontal),
+            new("Destroyer", 4, 6, 0, ShipOrientation.Horizontal),
+            new("Destroyer", 4, 6, 1, ShipOrientation.Horizontal),
+            new("Encouraçado", 3, 0, 2, ShipOrientation.Horizontal),
+            new("Patrulha", 1, 3, 2, ShipOrientation.Horizontal)
+        };
+    }
+
+    private async Task<MatchRedis> ObterEstadoDoRedisAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
+
+        var matchJson = await cache.GetStringAsync($"match:{_matchId}");
+        matchJson.Should().NotBeNullOrEmpty("O cache sumiu do Redis! A API acidentalmente apagou ou expirou a chave?");
+
+        return JsonSerializer.Deserialize<MatchRedis>(matchJson!)!;
+    }
+
+    private class Coordinate
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public bool GoodShot { get; set; }
     }
 
     #region Steps
@@ -375,9 +405,9 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
             .OnlyContain(s => !s.IsSunk, "Todos os navios do player 1 deveriam estar em operação");
 
 
-            matchInDb.Player2Board.Ships.All(s => s.HasBeenHit).Should().BeTrue("A IA deveria ter TODOS seus navios atingidos");
-            matchInDb.Player2Board.Ships.All(s => s.IsSunk).Should().BeTrue("A IA deveria ter TODOS seus navios afundados");
-  
+        matchInDb.Player2Board.Ships.All(s => s.HasBeenHit).Should()
+            .BeTrue("A IA deveria ter TODOS seus navios atingidos");
+        matchInDb.Player2Board.Ships.All(s => s.IsSunk).Should().BeTrue("A IA deveria ter TODOS seus navios afundados");
     }
 
     private async Task Passo_ValidarFimDeJogoNoBancoDeDadosFuzilarTabuleiroDaIA()
@@ -416,9 +446,11 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
             matchInDb.Player2Board.Ships.Should()
                 .OnlyContain(s => !s.IsSunk, "Todos os navios da IA deveriam estar em operação");
             matchInDb.Player2Hits.Should().Be(24, "A IA deveria ter acertado todos os 24 segmentos para vencer.");
-            
-            matchInDb.Player1Board.Ships.All(s => s.HasBeenHit).Should().BeTrue("Player1  deveria ter TODOS seus navios atingidos");
-            matchInDb.Player1Board.Ships.All(s => s.IsSunk).Should().BeTrue("Player1 deveria ter TODOS seus navios afundados");
+
+            matchInDb.Player1Board.Ships.All(s => s.HasBeenHit).Should()
+                .BeTrue("Player1  deveria ter TODOS seus navios atingidos");
+            matchInDb.Player1Board.Ships.All(s => s.IsSunk).Should()
+                .BeTrue("Player1 deveria ter TODOS seus navios afundados");
         }
         else
         {
@@ -430,16 +462,12 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
                 "Player 1 deveria ter no máximo 76 erros(coordenadas de agua)");
             matchInDb.Player1Hits.Should()
                 .Be(0, "Player 1 deveriater errado todos os tiro.");
-            
+
             _output.WriteLine("=========================================================");
-            _output.WriteLine($"Partida finalizada por exaustão de água. Turnos: {matchInDb.Player2Hits + matchInDb.Player2Misses + matchInDb.Player1Misses}");
+            _output.WriteLine(
+                $"Partida finalizada por exaustão de água. Turnos: {matchInDb.Player2Hits + matchInDb.Player2Misses + matchInDb.Player1Misses}");
             _output.WriteLine("=========================================================");
-          
         }
-
-
-            
-
     }
 
     private async Task Passo_ValidarFimDeJogoNoRedisFuzilarNaviosDaIA()
@@ -476,6 +504,16 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
             .BeNull("IA deveria ter TODOS seus navios afundados");
         finalMatchState.Boards.P2.Ships.All(ship => ship.Segments.All(s => s.Hit)).Should()
             .BeTrue("IA deveria ter todos os navios com tiro em todas as coordenadas");
+
+        var acertosConsecutivosRealDoP1 = finalMatchState.Boards.P2.ShotHistory.Aggregate(
+            (Atual: 0, Maximo: 0),
+            (acc, item) => item.Hit
+                ? (acc.Atual + 1, Math.Max(acc.Maximo, acc.Atual + 1))
+                : (0, acc.Maximo)
+        ).Maximo;
+
+        finalMatchState.P1_Stats.Streak.Should().Be(acertosConsecutivosRealDoP1,
+            $"A IA deveria ter {acertosConsecutivosRealDoP1} e o encontrado foi {finalMatchState.P1_Stats.Streak}");
     }
 
     private async Task Passo_ValidarFimDeJogoNoRedisFuzilarTabuleiroDaIA()
@@ -486,65 +524,45 @@ public class AgainstAiTests : IClassFixture<IntegrationTestWebAppFactory>
 
 
         /* SO PRA BLINDAR E O TESTE poder ficar deterministico, já que existem poucos cenarios onde isso nao acontece,
-          matematicamente a ia pode nao ganhar nos 76 turnos   */ 
+          matematicamente a ia pode nao ganhar nos 76 turnos   */
         if (finalMatchState.Status == MatchStatusRedis.FINISHED)
         {
             finalMatchState.Status.Should()
                 .Be(MatchStatusRedis.FINISHED, "A partida deveria estar finalizada no Redis");
 
             finalMatchState.P1_Stats.Hits.Should().Be(0, "Player 1 deveria ter 0 acertos");
-            finalMatchState.P1_Stats.Misses.Should().BeLessThanOrEqualTo(76, "Player 1 deveria ter perdido todos os tiros");
+            finalMatchState.P1_Stats.Misses.Should()
+                .BeLessThanOrEqualTo(76, "Player 1 deveria ter perdido todos os tiros");
             finalMatchState.P1_Stats.Streak.Should().Be(0, "Player 1 deveria ter 0 acertos consecutivos");
             finalMatchState.Boards.P1.AliveShips.Should().Be(0, "Player 1 deveria ter 0 navios");
-            finalMatchState.Boards.P1.Ships.Should().AllSatisfy(s => {
+            finalMatchState.Boards.P1.Ships.Should().AllSatisfy(s =>
+            {
                 s.IsDamaged.Should().BeTrue();
                 s.Sunk.Should().BeTrue();
-            },"TODOS OS NAVIOS DEVERIAM SER AFUNDADOS E ATINGIDOSA");
-            
+            }, "TODOS OS NAVIOS DEVERIAM SER AFUNDADOS E ATINGIDOSA");
+
             finalMatchState.Boards.P1.Ships.All(ship => ship.Segments.All(s => s.Hit)).Should()
                 .BeTrue("Player 1 deveria ter todos os navios com tiros em todas as coordenadas");
-            
+
             finalMatchState.P2_Stats.Hits.Should().Be(totalAcertosEsperados, "IA deveria ter 24 acertos");
-            
+
+            var acertosConsecutivosRealDaIA = finalMatchState.Boards.P1.ShotHistory.Aggregate(
+                (Atual: 0, Maximo: 0),
+                (acc, item) => item.Hit
+                    ? (acc.Atual + 1, Math.Max(acc.Maximo, acc.Atual + 1))
+                    : (0, acc.Maximo)
+            ).Maximo;
+
+            finalMatchState.P2_Stats.Streak.Should().Be(acertosConsecutivosRealDaIA,
+                $"A IA deveria ter {acertosConsecutivosRealDaIA} e o encontrado foi {finalMatchState.P2_Stats.Streak}");
         }
         else
         {
             finalMatchState.Status.Should().Be(MatchStatusRedis.IN_PROGRESS);
-            finalMatchState.Boards.P1.AliveShips.Should().BeGreaterThan(0, "Pelo menos um navio deve estar vivo se o jogo não acabou.");
-            
+            finalMatchState.Boards.P1.AliveShips.Should()
+                .BeGreaterThan(0, "Pelo menos um navio deve estar vivo se o jogo não acabou.");
         }
     }
 
     #endregion
-
-    private List<ShipPlacementDto> GetDefaultFleet()
-    {
-        return new List<ShipPlacementDto>
-        {
-            new("Porta-Aviões", 6, 0, 0, ShipOrientation.Horizontal),
-            new("Porta-Aviões", 6, 0, 1, ShipOrientation.Horizontal),
-            new("Destroyer", 4, 6, 0, ShipOrientation.Horizontal),
-            new("Destroyer", 4, 6, 1, ShipOrientation.Horizontal),
-            new("Encouraçado", 3, 0, 2, ShipOrientation.Horizontal),
-            new("Patrulha", 1, 3, 2, ShipOrientation.Horizontal)
-        };
-    }
-
-    private class Coordinate
-    {
-        public int X { get; set; }
-        public int Y { get; set; }
-        public bool GoodShot { get; set; }
-    }
-
-    private async Task<MatchRedis> ObterEstadoDoRedisAsync()
-    {
-        using var scope = _factory.Services.CreateScope();
-        var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
-
-        var matchJson = await cache.GetStringAsync($"match:{_matchId}");
-        matchJson.Should().NotBeNullOrEmpty("O cache sumiu do Redis! A API acidentalmente apagou ou expirou a chave?");
-
-        return JsonSerializer.Deserialize<MatchRedis>(matchJson!)!;
-    }
 }
