@@ -954,4 +954,8 @@ $RECYCLE.BIN/
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 
+## Personal
+
+tests/coveragereport/**/*
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,linux,jetbrains,jetbrains+iml,jetbrains+all,rider,visualstudiocode,visualstudio,dotnetcore,dotsettings,dotfilessh,csharp
