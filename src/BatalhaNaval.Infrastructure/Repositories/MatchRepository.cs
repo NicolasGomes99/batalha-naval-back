@@ -1,4 +1,4 @@
-﻿using BatalhaNaval.Application.Interfaces;
+﻿﻿using BatalhaNaval.Application.Interfaces;
 using BatalhaNaval.Domain.Entities;
 using BatalhaNaval.Domain.Enums;
 using BatalhaNaval.Infrastructure.Persistence;
@@ -48,8 +48,8 @@ public class MatchRepository : IMatchRepository
             entry.Property(p => p.Player2Hits).IsModified = true;
             entry.Property(p => p.Player1Misses).IsModified = true;
             entry.Property(p => p.Player2Misses).IsModified = true;
-            entry.Property(p => p.Player1ConsecutiveHits).IsModified = true;
-            entry.Property(p => p.Player2ConsecutiveHits).IsModified = true;
+            entry.Property(p => p.Player1MaxConsecutiveHits).IsModified = true;
+            entry.Property(p => p.Player2MaxConsecutiveHits).IsModified = true;
         }
         else
         {
