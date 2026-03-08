@@ -103,7 +103,7 @@ public class MatchRepository : IMatchRepository
     public async Task<List<Guid>> GetActiveAiMatchIdsAsync()
     {
         return await _context.Matches
-            .Where(m => m.Player2Id == null && m.Status == MatchStatus.InProgress)
+            .Where(m =>m.Status == MatchStatus.InProgress)
             .Select(m => m.Id)
             .ToListAsync();
     }

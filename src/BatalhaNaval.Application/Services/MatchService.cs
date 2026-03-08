@@ -89,11 +89,12 @@ public class MatchService : IMatchService
                 ? "Partida já encerrada."
                 : "Partida em andamento.");
 
-
+        
+        match.RestoreReadyState();
 
         var board = playerId == match.Player1Id ? match.Player1Board : match.Player2Board;
 
-        // Limpa navios anteriores se houver (para permitir reset no setup)
+        // Limpa navios anteriores se houver (para permitir reset no setup)C
         board.Ships.Clear();
 
         // 1. Posiciona os navios do Jogador
@@ -211,15 +212,20 @@ public class MatchService : IMatchService
         var match = await _stateRepository.GetStateAsync(input.MatchId);
         if (match == null) match = await GetMatchOrThrow(input.MatchId); // Fallback
 
-        // Executa o movimento
-        match.ExecuteShipMovement(playerId, input.ShipId, input.Direction.Value);
+        try
+        {
+            match.ExecuteShipMovement(playerId, input.ShipId, input.Direction.Value);
+        }
+        catch (TurnTimeoutException)
+        {
+            await _stateRepository.SaveStateAsync(match);
+            throw;
+        }
 
-        // Verificamos se o turno caiu no colo da IA (por timeout)
-        // Se sim, precisamos acordá-la para jogar imediatamente.
+
         if (match.Player2Id == null && match.CurrentTurnPlayerId == Guid.Empty) await ProcessAiTurnLoopAsync(match);
 
         await _stateRepository.SaveStateAsync(match);
-        // await _repository.SaveAsync(match); // Opcional SQL
     }
 
 

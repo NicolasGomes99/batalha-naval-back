@@ -1,6 +1,7 @@
 ﻿using BatalhaNaval.API.Extensions;
 using BatalhaNaval.Application.DTOs;
 using BatalhaNaval.Application.Interfaces;
+using BatalhaNaval.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -110,7 +111,15 @@ public class MatchController : ControllerBase
     {
         var playerId = User.GetUserId();
 
-        await _matchService.ExecutePlayerMoveAsync(input, playerId);
+        try
+        {
+            await _matchService.ExecutePlayerMoveAsync(input, playerId);
+        }
+        catch (TurnTimeoutException)
+        {
+            return BadRequest(new {message = "Não é possível mover o navio: turno expirado. Aguarde o próximo turno para tentar novamente."});
+        }
+
 
         return Ok(new { message = "Navio movido com sucesso." });
     }

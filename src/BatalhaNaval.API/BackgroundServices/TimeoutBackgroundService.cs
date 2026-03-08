@@ -9,15 +9,15 @@ namespace BatalhaNaval.API.BackgroundServices;
 ///     ação do jogador ou do frontend.
 ///     Delega toda a lógica de domínio e persistência ao MatchService.
 /// </summary>
-public class AiTimeoutBackgroundService : BackgroundService
+public class TimeoutBackgroundService : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
-    private readonly ILogger<AiTimeoutBackgroundService> _logger;
+    private readonly ILogger<TimeoutBackgroundService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public AiTimeoutBackgroundService(
+    public TimeoutBackgroundService(
         IServiceScopeFactory scopeFactory,
-        ILogger<AiTimeoutBackgroundService> logger)
+        ILogger<TimeoutBackgroundService> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -25,7 +25,7 @@ public class AiTimeoutBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("AiTimeoutBackgroundService iniciado.");
+        _logger.LogInformation("TimeoutBackgroundService iniciado.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -41,7 +41,7 @@ public class AiTimeoutBackgroundService : BackgroundService
             }
         }
 
-        _logger.LogInformation("AiTimeoutBackgroundService encerrado.");
+        _logger.LogInformation("TimeoutBackgroundService encerrado.");
     }
 
     private async Task ProcessTimeoutsAsync()

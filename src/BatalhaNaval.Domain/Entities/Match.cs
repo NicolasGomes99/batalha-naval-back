@@ -360,6 +360,17 @@ public class Match
     // LÓGICA DE NEGÓCIO
     // ====================================================================
 
+    /// <summary>
+    /// Restaura os flags de "pronto" com base no estado persistido do tabuleiro.
+    /// Deve ser chamado após carregar a partida do banco de dados (SQL),
+    /// pois os campos _player1Ready e _player2Ready são privados e não são persistidos.
+    /// </summary>
+    public void RestoreReadyState()
+    {
+        _player1Ready = Player1Board.Ships.Count > 0;
+        _player2Ready = Player2Board.Ships.Count > 0;
+    }
+
     public void SetPlayerReady(Guid playerId)
     {
         if (Status != MatchStatus.Setup) return;

@@ -119,7 +119,7 @@ builder.Services.AddScoped<ICampaignService, CampaignService>();
 builder.Services.AddScoped<IMatchService, MatchService>();
 
 // Background Service: verifica timeout de turno em partidas contra IA a cada 5s
-builder.Services.AddHostedService<AiTimeoutBackgroundService>();
+builder.Services.AddHostedService<TimeoutBackgroundService>();
 
 // ==================================================================
 // 3. Configuração da API e Serialização JSON
