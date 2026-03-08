@@ -11,12 +11,18 @@ public class UserService : IUserService
     private readonly IPasswordService _passwordService;
     private readonly IUserRepository _userRepository;
     private readonly IMatchRepository _matchRepository;
+    private readonly IMedalRepository _medalRepository;
 
-    public UserService(IUserRepository userRepository, IPasswordService passwordService, IMatchRepository matchRepository)
+    public UserService(
+        IUserRepository userRepository,
+        IPasswordService passwordService,
+        IMatchRepository matchRepository,
+        IMedalRepository medalRepository)
     {
         _userRepository = userRepository;
         _passwordService = passwordService;
         _matchRepository = matchRepository;
+        _medalRepository = medalRepository;
     }
 
     public async Task<UserResponseDto> RegisterUserAsync(CreateUserDto dto)
@@ -56,6 +62,22 @@ public class UserService : IUserService
     public async Task<bool> ExistsAsync(Guid id)
     {
         return await _userRepository.ExistsAsync(id);
+    }
+    
+    public async Task<UserProfileDTO> GetUserProfileAsync(Guid userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null) return null;
+
+        var userMedals = await _medalRepository.GetUserMedalsAsync(userId);
+
+        return new UserProfileDTO
+        {
+            RankPoints = user.Profile.RankPoints,
+            Wins = user.Profile.Wins,
+            Losses = user.Profile.Losses,
+            EarnedMedalCodes = userMedals.Select(um => um.Medal.Code).ToList()
+        };
     }
 
     public async Task<List<RankingEntryDto>> GetRankingAsync()
