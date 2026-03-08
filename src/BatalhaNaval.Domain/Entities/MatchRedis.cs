@@ -6,11 +6,18 @@ namespace BatalhaNaval.Domain.Entities;
 public class MatchRedis
 {
     [JsonPropertyName("MatchId")] public string MatchId { get; set; }
-
+    [JsonPropertyName("MovedThisTurn")] public bool MovedThisTurn { get; set; }
     [JsonPropertyName("GameMode")] public GameModeRedis GameMode { get; set; }
     
     [JsonPropertyName("StartedAt")]public long StartedAt { get; set; }
     [JsonPropertyName("AiDifficulty")] public AiDifficultyRedis? AiDifficulty { get; set; }
+
+    [JsonPropertyName("IsCampaignMatch")] public bool IsCampaignMatch { get; set; }
+
+    /// <summary>Estágio da campanha serializado como string. Null para partidas fora da campanha.</summary>
+    [JsonPropertyName("CampaignStage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CampaignStage { get; set; }
 
     [JsonPropertyName("Player1Id")] public string Player1Id { get; set; }
 
