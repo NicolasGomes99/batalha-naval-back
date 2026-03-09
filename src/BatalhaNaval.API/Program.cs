@@ -25,7 +25,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
-var originsString = builder.Configuration["ALLOWED_ORIGINS"] ?? builder.Configuration["AllowedOrigins"];
+var correctCase = builder.Environment.EnvironmentName == "Development"
+    ? builder.Configuration["AllowedOrigins:0"]
+    : builder.Configuration["AllowedOrigins"];
+var originsString = builder.Configuration["ALLOWED_ORIGINS"] ?? correctCase;
 var allowedOrigins = originsString?
     .Split(',', StringSplitOptions.RemoveEmptyEntries)
     .Select(o => o.Trim().TrimEnd('/'))
@@ -305,6 +308,7 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Iniciando Batalha Naval API - .NET 10");
 logger.LogInformation("CORS configurado para as seguintes origens: {Origins}", 
     string.Join(", ", allowedOrigins.Length > 0 ? allowedOrigins : new[] { "NENHUMA (Cuidado!)" }));
+logger.LogInformation("Aplicação iniciada no ambiente: {Environment}", app.Environment.EnvironmentName);
 
 app.Run();
 
